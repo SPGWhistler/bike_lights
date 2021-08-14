@@ -24,12 +24,31 @@ void white() {
 }
 
 void rainbow() {
-	fill_rainbow(strip1, 15, 0, 255);
+	fill_rainbow(strip1, 15, 0);
 	FastLED.show();
 }
 
 void black() {
 	FastLED.showColor(CRGB::Black);
+}
+
+  void printOut1(int c) {
+    for (int bits = 7; bits > -1; bits--) {
+     // Compare bits 7-0 in byte
+     if (c & (1 << bits)) {
+       Serial.print("1");
+      }
+      else {
+        Serial.print("0");
+      }
+    }
+  }
+void show_color(byte* bytes) {
+	CRGB color;
+	color.r = bytes[1];
+	color.g = bytes[2];
+	color.b = bytes[3];
+	FastLED.showColor(color);
 }
 
 void ledSetup() {

@@ -4,11 +4,11 @@ BluetoothSerial SerialBT;
 
 void btSetup() {
   SerialBT.begin("bike_lights");
+  SerialBT.setTimeout(50);
 }
 
-byte btLoop() {
+void btLoop(byte* bytes) {
 	if (SerialBT.available()) {
-		return SerialBT.read();
+		SerialBT.readBytes( bytes, 4);
 	}
-	return 0;
 }

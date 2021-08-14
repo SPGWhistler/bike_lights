@@ -9,8 +9,12 @@ void setup(void) {
 }
 
 void loop(void) {
-	byte val = btLoop();
-	switch (val) {
+	byte bytes[4];
+	btLoop(bytes);
+	switch (bytes[0]) {
+		case 0x28:
+			show_color(bytes);
+			break;
 		case 0x30:
 			black();
 			break;
