@@ -9,29 +9,46 @@ void setup(void) {
 }
 
 void loop(void) {
-	byte bytes[4];
+	byte bytes[4] = {0, 0, 0, 0};
 	btLoop(bytes);
-	switch (bytes[0]) {
-		case 0x28:
-			show_color(bytes);
-			break;
-		case 0x30:
-			black();
-			break;
-		case 0x31:
-			red();
-			break;
-		case 0x32:
-			green();
-			break;
-		case 0x33:
-			blue();
-			break;
-		case 0x34:
-			white();
-			break;
-		case 0x35:
-			rainbow();
-			break;
+	if (bytes[0]) {
+		switch (bytes[0]) {
+			case 0x28:
+				Serial.println("show color");
+				show_color(bytes);
+				break;
+			case 0x30:
+				Serial.println("black");
+				black();
+				break;
+			case 0x31:
+				Serial.println("red");
+				red();
+				break;
+			case 0x32:
+				Serial.println("green");
+				green();
+				break;
+			case 0x33:
+				Serial.println("blue");
+				blue();
+				break;
+			case 0x34:
+				Serial.println("white");
+				white();
+				break;
+			case 0x35:
+				Serial.println("rainbow");
+				rainbow();
+				break;
+			case 0x36:
+				Serial.println("sparkle");
+				sparkle();
+				break;
+			default:
+				Serial.println("undefined");
+				break;
+		}
 	}
+	ledLoop();
 }

@@ -10,5 +10,10 @@ void btSetup() {
 void btLoop(byte* bytes) {
 	if (SerialBT.available()) {
 		SerialBT.readBytes( bytes, 4);
+	} else {
+		//TODO Only for development:
+		if (Serial.available()) {
+			Serial.readBytes( bytes, 4);
+		}
 	}
 }
