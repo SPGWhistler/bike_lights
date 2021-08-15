@@ -1,4 +1,5 @@
 #include <FastLED.h>
+#include <unordered_map>
 
 //15, 15, 92 (32 + 16 + 14 + 14 + 16)
 #define STRIP1_COUNT 15
@@ -14,6 +15,22 @@
 CRGB strip1[STRIP1_COUNT];
 CRGB strip2[STRIP2_COUNT];
 CRGB strip3[STRIP3_COUNT];
+
+std::unordered_map<char, unsigned long> delays{};
+std::unordered_map<char, unsigned long> times{};
+void setupDelay(char key, unsigned long delay) {
+	delays[key] = delay;
+	times[key] = 0;
+}
+unsigned long currentMillis;
+bool canRun(char key) {
+	currentMillis = millis();
+	if (currentMillis - times[key] >= delays[key]) {
+		times[key] = currentMillis;
+		return true;
+	}
+	return false;
+}
 
 void red(){
 	FastLED.showColor(CRGB::Red);
@@ -76,13 +93,10 @@ void ledSetup() {
 	FastLED.setBrightness(BRIGHTNESS);
 
 	black();
+	setupDelay('s', 100);
 }
-unsigned long currentMillis;
-unsigned long previousMillis = 0;
 void ledLoop() {
-	currentMillis = millis();
-	if (currentMillis - previousMillis >= sparkleDelay) {
-		previousMillis = currentMillis;
+	if (canRun('s')) {
 		if (shouldSparkle == true) {
 			doSparkle(100);
 		}
