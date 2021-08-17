@@ -1,5 +1,5 @@
 #include <FastLED.h>
-#include <unordered_map>
+#include <Canrun.h>
 
 //15, 15, 92 (32 + 16 + 14 + 14 + 16)
 #define STRIP1_COUNT 15
@@ -10,27 +10,12 @@
 #define STRIP3_PIN 4
 #define STRIP_TYPE WS2812B
 #define LED_ORDER GRB
-#define BRIGHTNESS 50
+
+Canrun canrun;
 
 CRGB strip1[STRIP1_COUNT];
 CRGB strip2[STRIP2_COUNT];
 CRGB strip3[STRIP3_COUNT];
-
-std::unordered_map<char, unsigned long> delays{};
-std::unordered_map<char, unsigned long> times{};
-void setupDelay(char key, unsigned long delay) {
-	delays[key] = delay;
-	times[key] = 0;
-}
-unsigned long currentMillis;
-bool canRun(char key) {
-	currentMillis = millis();
-	if (currentMillis - times[key] >= delays[key]) {
-		times[key] = currentMillis;
-		return true;
-	}
-	return false;
-}
 
 void red(){
 	FastLED.showColor(CRGB::Red);
@@ -59,7 +44,6 @@ void doSparkle( fract8 chanceOfGlitter) {
 }
 
 bool shouldSparkle = false;
-const long sparkleDelay = 100;
 void sparkle() {
 	shouldSparkle = true;
 }
@@ -84,19 +68,32 @@ void show_color(byte* bytes) {
 	FastLED.showColor(color);
 }
 
+void setBrightness(byte* bytes = 0) {
+	/*
+	uint8_t brightness = uint8_t(
+            (unsigned char)(bytes[0]) << 24 |
+            (unsigned char)(bytes[1]) << 16 |
+            (unsigned char)(bytes[2]) << 8 |
+            (unsigned char)(bytes[3]));
+			*/
+	uint8_t brightness = 50;
+	Serial.println("Setting brightness to:");
+	Serial.println(brightness);
+	FastLED.setBrightness(brightness);
+}
 
 void ledSetup() {
 	FastLED.addLeds<STRIP_TYPE, STRIP1_PIN, LED_ORDER>(strip1, STRIP1_COUNT).setCorrection(TypicalSMD5050);
 	FastLED.addLeds<STRIP_TYPE, STRIP2_PIN, LED_ORDER>(strip2, STRIP2_COUNT).setCorrection(TypicalSMD5050);
 	FastLED.addLeds<STRIP_TYPE, STRIP3_PIN, LED_ORDER>(strip3, STRIP3_COUNT).setCorrection(TypicalSMD5050);
 
-	FastLED.setBrightness(BRIGHTNESS);
-
+	setBrightness();
 	black();
-	setupDelay('s', 100);
+	canrun.setupDelay('s', 100);
 }
+
 void ledLoop() {
-	if (canRun('s')) {
+	if (canrun.run('s')) {
 		if (shouldSparkle == true) {
 			doSparkle(100);
 		}

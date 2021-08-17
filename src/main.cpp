@@ -45,6 +45,10 @@ void loop(void) {
 				Serial.println("sparkle");
 				sparkle();
 				break;
+			case 0x37:
+				Serial.println("set brightness");
+				setBrightness(bytes);
+				break;
 			default:
 				Serial.println("undefined");
 				break;
