@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include "otaSetup.h"
 #include "btSetup.h"
 #include "ledSetup.h"
 
@@ -49,10 +50,19 @@ void loop(void) {
 				Serial.println("set brightness");
 				setBrightness(bytes);
 				break;
+			case 0x38:
+				Serial.println("sinelon");
+				sinelon();
+				break;
+			case 0x39:
+				Serial.println("otaSetup");
+				otaSetup();
+				break;
 			default:
 				Serial.println("undefined");
 				break;
 		}
 	}
 	ledLoop();
+	otaLoop();
 }
