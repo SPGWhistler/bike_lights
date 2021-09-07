@@ -10,6 +10,8 @@
 #define MID2_COUNT 32
 #define MID1_PIN 19
 #define MID2_PIN 5
+#define MLEFT_COUNT 62
+#define MRIGHT_COUNT 62
 
 #define STRIP_TYPE WS2812B
 #define LED_ORDER GRB
@@ -24,6 +26,8 @@ CRGB mid[MID_COUNT];
 
 bool shouldSinelon = false;
 bool shouldSparkle = false;
+bool shouldRightBlinker = false;
+bool shouldLeftBlinker = false;
 
 /**
  * All a specific color, called internally.
@@ -40,6 +44,8 @@ void black() {
 	doShowColor(CRGB::Black);
 	shouldSparkle = false;
 	shouldSinelon = false;
+	shouldRightBlinker = false;
+	shouldLeftBlinker = false;
 }
 
 /**
@@ -53,6 +59,17 @@ void show_color(byte* bytes) {
 	color.g = bytes[2];
 	color.b = bytes[3];
 	doShowColor(color);
+}
+
+/**
+ * Reverse the Middle2 leds.
+ */
+void reverseMid2() {
+	for (uint i = MID1_COUNT; i < MID1_COUNT + (MID2_COUNT / 2); i++) {
+		CRGB temp = mid[i];
+		mid[i] = mid[MID_COUNT - (i - MID1_COUNT) - 1];
+		mid[MID_COUNT - (i - MID1_COUNT) - 1] = temp;
+	}
 }
 
 /**
@@ -119,6 +136,52 @@ void rainbow() {
 	FastLED.show();
 }
 
+void setLeftBlinker(bool on) {
+	for (uint8_t i=0; i<(FLEFT_COUNT); i++){
+		fLeft[i] = (on) ? CRGB::Orange : CRGB::Black;
+	}
+	for (uint8_t i=0; i<(MLEFT_COUNT); i++){
+		mid[i] = (on) ? CRGB::Orange : CRGB::Black;
+	}
+	FastLED.show();
+}
+
+void leftBlinker() {
+	shouldLeftBlinker = !shouldLeftBlinker;
+	if (!shouldLeftBlinker) {
+		setLeftBlinker(false);
+	}
+}
+
+bool leftBlinkerOn = false;
+void doLeftBlinker() {
+	setLeftBlinker(leftBlinkerOn);
+	leftBlinkerOn = !leftBlinkerOn;
+}
+
+void setRightBlinker(bool on) {
+	for (uint8_t i=0; i<(FRIGHT_COUNT); i++){
+		fRight[i] = (on) ? CRGB::Orange : CRGB::Black;
+	}
+	for (uint8_t i=MLEFT_COUNT; i<(MID_COUNT); i++){
+		mid[i] = (on) ? CRGB::Orange : CRGB::Black;
+	}
+	FastLED.show();
+}
+
+void rightBlinker() {
+	shouldRightBlinker = !shouldRightBlinker;
+	if (!shouldRightBlinker) {
+		setRightBlinker(false);
+	}
+}
+
+bool rightBlinkerOn = false;
+void doRightBlinker() {
+	setRightBlinker(rightBlinkerOn);
+	rightBlinkerOn = !rightBlinkerOn;
+}
+
 /**
  * Turn on sinelon.
  */
@@ -140,14 +203,6 @@ uint8_t hue2_shift = 20;  // Hue shift for secondary color.  Use 0 for no shift.
 int16_t pos;                // Pixel position.
 int8_t advance = -1*width;  // Stores the advance amount.
 uint8_t color;              // Stores a hue color.
-
-void reverseMid2() {
-	for (uint i = MID1_COUNT; i < MID1_COUNT + (MID2_COUNT / 2); i++) {
-		CRGB temp = mid[i];
-		mid[i] = mid[MID_COUNT - (i - MID1_COUNT) - 1];
-		mid[MID_COUNT - (i - MID1_COUNT) - 1] = temp;
-	}
-}
 
 void cylonLoop(CRGB* leds, int numLeds) {
   EVERY_N_SECONDS(5){  // Demo: Change direction every N seconds.
@@ -190,8 +245,6 @@ void setBrightness(byte* bytes = 0) {
             (unsigned char)(bytes[3]));
 			*/
 	uint8_t brightness = 55;
-	Serial.println("Setting brightness to:");
-	Serial.println(brightness);
 	FastLED.setBrightness(brightness);
 }
 
@@ -211,6 +264,7 @@ void ledSetup() {
 	setBrightness();
 	black();
 	canrun.setupDelay('s', 100);
+	canrun.setupDelay('b', 100);
 	sinelon();
 }
 
@@ -225,5 +279,13 @@ void ledLoop() {
 	}
 	if (shouldSinelon == true) {
 		cylonLoop(mid, MID_COUNT);
+	}
+	if (canrun.run('b')) {
+		if (shouldRightBlinker == true) {
+			doRightBlinker();
+		}
+		if (shouldLeftBlinker == true) {
+			doLeftBlinker();
+		}
 	}
 }

@@ -17,51 +17,59 @@ void loop(void) {
 	if (bytes[0]) {
 		switch (bytes[0]) {
 			case 0x28:
-				Serial.println("show color");
+				btPrintln("show color");
 				show_color(bytes);
 				break;
 			case 0x30:
-				Serial.println("black");
+				btPrintln("black");
 				black();
 				break;
 			case 0x31:
-				Serial.println("red");
+				btPrintln("red");
 				red();
 				break;
 			case 0x32:
-				Serial.println("green");
+				btPrintln("green");
 				green();
 				break;
 			case 0x33:
-				Serial.println("blue");
+				btPrintln("blue");
 				blue();
 				break;
 			case 0x34:
-				Serial.println("white");
+				btPrintln("white");
 				white();
 				break;
 			case 0x35:
-				Serial.println("rainbow");
+				btPrintln("rainbow");
 				rainbow();
 				break;
 			case 0x36:
-				Serial.println("sparkle");
+				btPrintln("sparkle");
 				sparkle();
 				break;
 			case 0x37:
-				Serial.println("set brightness");
+				btPrintln("set brightness");
 				setBrightness(bytes);
 				break;
 			case 0x38:
-				Serial.println("sinelon");
+				btPrintln("sinelon");
 				sinelon();
 				break;
 			case 0x39:
-				Serial.println("otaSetup");
+				btPrintln("otaSetup");
 				otaSetup();
 				break;
+			case 0x40:
+				btPrintln("right blinker");
+				rightBlinker();
+				break;
+			case 0x41:
+				btPrintln("left blinker");
+				leftBlinker();
+				break;
 			default:
-				Serial.println("undefined");
+				btPrintln("undefined");
 				break;
 		}
 	}
