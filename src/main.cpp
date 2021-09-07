@@ -7,6 +7,8 @@ void setup(void) {
   Serial.begin(115200);
   btSetup();
   ledSetup();
+  //TODO Remove, or add in a way to only stay active if whistler is available.
+  otaSetup();
 }
 
 void loop(void) {
