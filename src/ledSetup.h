@@ -146,7 +146,7 @@ void solidColor(byte* bytes) {
 }
 
 uint8_t lastTestPatternColor = 0;
-void doTestPattern() {
+void testPatternLoop() {
 	CRGB color;
 	switch (lastTestPatternColor) {
 		case 0:
@@ -169,7 +169,7 @@ void doTestPattern() {
 	FastLED.showColor(color);
 }
 
-void doSparkle( fract8 chanceOfGlitter) {
+void sparkleLoop( fract8 chanceOfGlitter) {
 	FastLED.clear(true);
 	if( random8() < chanceOfGlitter) {
 		frontLeft[ random16(FRONT_LEFT_COUNT) ] += CRGB::White;
@@ -185,7 +185,7 @@ byte heat[124];
 //TODO This looks crappy because its just one fire for all the leds.
 //It would be better to convert this to render a fire on each virtual set
 //of leds. That requires reworking how the 'heat' variable above is used.
-void doFire(CRGB* leds, int count, bool reverse, byte* heat) {
+void fireLoop(CRGB* leds, int count, bool reverse, byte* heat) {
     for( int i = 0; i < count; i++) {
       heat[i] = qsub8( heat[i],  random8(0, ((COOLING * 10) / count) + 2));
     }
@@ -210,7 +210,7 @@ void doFire(CRGB* leds, int count, bool reverse, byte* heat) {
 }
 
 uint8_t lastHue = 0;
-void doRainbow() {
+void rainbowLoop() {
 	fill_rainbow(frontLeft, FRONT_LEFT_COUNT, lastHue);
 	fill_rainbow(frontRight, FRONT_RIGHT_COUNT, lastHue);
 	fill_rainbow(body, BODY_COUNT, lastHue);
@@ -229,7 +229,7 @@ uint8_t hue2_shift = 20;  // Hue shift for secondary color.  Use 0 for no shift.
 int16_t pos;                // Pixel position.
 int8_t advance = -1*width;  // Stores the advance amount.
 uint8_t color;              // Stores a hue color.
-void doMarque(CRGB* leds, int numLeds) {
+void marqueLoop(CRGB* leds, int numLeds) {
   EVERY_N_SECONDS(5){  // Demo: Change direction every N seconds.
     delta = -1*delta;
   }
@@ -261,70 +261,58 @@ void doMarque(CRGB* leds, int numLeds) {
   }
 }
 
-void setLeftBlinker(bool on) {
-	for (uint8_t i = FRONT_LEFT_START; i < FRONT_LEFT_COUNT; i++){
-		frontLeft[i] = (on) ? CRGB::Orange : CRGB::Black;
-	}
-	for (uint8_t i = BODY_LEFT_START; i < BODY_LEFT_COUNT; i++){
-		body[i] = (on) ? CRGB::Orange : CRGB::Black;
+void setBlinker(bool on, CRGB* leds, uint8_t start, uint8_t end) {
+	for (uint8_t i = start; i < end; i++){
+		leds[i] = (on) ? CRGB::Orange : CRGB::Black;
 	}
 	FastLED.show();
 }
+void setLeftBlinker(bool on) {
+	setBlinker(on, frontLeft, FRONT_LEFT_START, FRONT_LEFT_END);
+	setBlinker(on, body, BODY_LEFT_START, BODY_LEFT_END);
+}
+void setRightBlinker(bool on) {
+	setBlinker(on, frontRight, FRONT_RIGHT_START, FRONT_RIGHT_END);
+	setBlinker(on, body, BODY_RIGHT_START, BODY_RIGHT_END);
+}
 
-void leftBlinker() {
-	shouldLeftBlinker = !shouldLeftBlinker;
-	if (!shouldLeftBlinker) {
+void blinkerLoop() {
+	if (shouldRightBlinker) {
+		setRightBlinker(rightBlinkerOn);
+		rightBlinkerOn = !rightBlinkerOn;
+	}
+	if (shouldLeftBlinker) {
+		setLeftBlinker(leftBlinkerOn);
+		leftBlinkerOn = !leftBlinkerOn;
+	}
+}
+
+void blinker(bool isLeft, bool &shouldBlink, bool &shouldBlink2, bool &status, bool &status2) {
+	shouldBlink = !shouldBlink;
+	if (!shouldBlink) {
 		//Turn Blinker Off
-		setLeftBlinker(false);
-		if (!shouldRightBlinker) {
+		if (isLeft) {
+			setLeftBlinker(false);
+		} else {
+			setRightBlinker(false);
+		}
+		if (!shouldBlink2) {
 			recallLastPattern();
 		}
 	} else {
 		//Turn Blinker On
 		setActivePattern(PAT_OVERRIDE);
-		leftBlinkerOn = false;
-		if (shouldRightBlinker) {
-			rightBlinkerOn = false;
+		status = false;
+		if (shouldBlink2) {
+			status2 = false;
 		}
 	}
 }
-
-void doLeftBlinker() {
-	setLeftBlinker(leftBlinkerOn);
-	leftBlinkerOn = !leftBlinkerOn;
+void leftBlinker() {
+	blinker(true, shouldLeftBlinker, shouldRightBlinker, leftBlinkerOn, rightBlinkerOn);
 }
-
-void setRightBlinker(bool on) {
-	for (uint8_t i = FRONT_RIGHT_START; i < FRONT_RIGHT_COUNT; i++){
-		frontRight[i] = (on) ? CRGB::Orange : CRGB::Black;
-	}
-	for (uint8_t i = BODY_RIGHT_START; i < BODY_RIGHT_END; i++){
-		body[i] = (on) ? CRGB::Orange : CRGB::Black;
-	}
-	FastLED.show();
-}
-
 void rightBlinker() {
-	shouldRightBlinker = !shouldRightBlinker;
-	if (!shouldRightBlinker) {
-		//Turn Blinker off
-		setRightBlinker(false);
-		if (!shouldLeftBlinker) {
-			recallLastPattern();
-		}
-	} else {
-		//Turn Blinker on
-		setActivePattern(PAT_OVERRIDE);
-		rightBlinkerOn = false;
-		if (shouldLeftBlinker) {
-			leftBlinkerOn = false;
-		}
-	}
-}
-
-void doRightBlinker() {
-	setRightBlinker(rightBlinkerOn);
-	rightBlinkerOn = !rightBlinkerOn;
+	blinker(false, shouldRightBlinker, shouldLeftBlinker, rightBlinkerOn, leftBlinkerOn);
 }
 
 
@@ -357,38 +345,31 @@ void ledLoop() {
 	switch (activePattern) {
 		case PAT_TEST:
 			if (canrun.run('t')) {
-				doTestPattern();
+				testPatternLoop();
 			}
 			break;
 		case PAT_SPARKLE:
 			if (canrun.run('s')) {
-				doSparkle(200);
+				sparkleLoop(200);
 			}
 			break;
 		case PAT_MARQUE:
-			doMarque(body, BODY_COUNT);
+			marqueLoop(body, BODY_COUNT);
 			break;
 		case PAT_RAINBOW:
 			if (canrun.run('r')) {
-				doRainbow();
+				rainbowLoop();
 			}
 			break;
 		case PAT_FIRE:
 			if (canrun.run('f')) {
-				doFire(body, BODY_COUNT, true, heat);
+				fireLoop(body, BODY_COUNT, true, heat);
 			}
 			break;
 		default:
 			break;
 	}
 	if (canrun.run('b')) {
-		if (shouldRightBlinker == true) {
-			doRightBlinker();
-		}
-		if (shouldLeftBlinker == true) {
-			doLeftBlinker();
-		}
+		blinkerLoop();
 	}
 }
-//TODO:
-//- you can turn on a pattern while a blinker is on.
