@@ -55,12 +55,14 @@ const uint REAR_RIGHT_END = REAR_RIGHT_START + REAR_RIGHT_COUNT;
 #define STRIP_TYPE WS2812B
 #define LED_ORDER GRB
 
-#define PAT_MARQUE 1
-#define PAT_SPARKLE 2
-#define PAT_RAINBOW 3
-#define PAT_SOLID 4
-#define PAT_TEST 5
-#define PAT_FIRE 6
+const uint8_t PAT_OVERRIDE = 0;
+const uint8_t PAT_OFF = 1;
+const uint8_t PAT_MARQUE = 2;
+const uint8_t PAT_SPARKLE = 3;
+const uint8_t PAT_RAINBOW = 4;
+const uint8_t PAT_SOLID = 5;
+const uint8_t PAT_TEST = 6;
+const uint8_t PAT_FIRE = 7;
 
 Canrun canrun;
 
@@ -79,28 +81,29 @@ bool shouldLeftBlinker = false;
 bool leftBlinkerOn = false;
 bool rightBlinkerOn = false;
 
-/**
- * All off, kill all effects.
- */
+//Called internally only to temporarily erase leds.
+//See turnOff() below to kill the running pattern.
 void black() {
 	FastLED.clear(true);
 	FastLED.showColor(CRGB::Black);
-	lastPattern = activePattern;
-	activePattern = 0;
-	shouldRightBlinker = false;
-	shouldLeftBlinker = false;
 }
 
 void recallLastPattern() {
-	FastLED.clear(true);
-	FastLED.showColor(CRGB::Black);
+	black();
 	activePattern = lastPattern;
-	shouldRightBlinker = false;
-	shouldLeftBlinker = false;
+	SerialBT.println("Restoring Last Pattern:");
+	SerialBT.println(lastPattern);
 }
 
 void setActivePattern(uint8_t pattern) {
 	black();
+	if (pattern != PAT_OVERRIDE) {
+		lastPattern = pattern;
+		SerialBT.println("Saving to Last Pattern:");
+		SerialBT.println(lastPattern);
+	} else {
+		SerialBT.println("Not to saving pattern.");
+	}
 	activePattern = pattern;
 }
 
@@ -122,6 +125,11 @@ void reverseBodySection2() {
 void setBrightness(byte* bytes = 0) {
 	uint8_t brightness = 55;
 	FastLED.setBrightness(brightness);
+}
+
+//Called externally to turn off the leds and kill the pattern.
+void turnOff() {
+	setActivePattern(PAT_OFF);
 }
 
 void solidColor(byte* bytes) {
@@ -261,10 +269,10 @@ void doMarque(CRGB* leds, int numLeds) {
 }
 
 void setLeftBlinker(bool on) {
-	for (uint8_t i=0; i<(FRONT_LEFT_COUNT); i++){
+	for (uint8_t i = FRONT_LEFT_START; i < FRONT_LEFT_COUNT; i++){
 		frontLeft[i] = (on) ? CRGB::Orange : CRGB::Black;
 	}
-	for (uint8_t i=0; i<(BODY_LEFT_COUNT); i++){
+	for (uint8_t i = BODY_LEFT_START; i < BODY_LEFT_COUNT; i++){
 		body[i] = (on) ? CRGB::Orange : CRGB::Black;
 	}
 	FastLED.show();
@@ -273,12 +281,14 @@ void setLeftBlinker(bool on) {
 void leftBlinker() {
 	shouldLeftBlinker = !shouldLeftBlinker;
 	if (!shouldLeftBlinker) {
-		//Blinker Off
-		recallLastPattern();
+		//Turn Blinker Off
 		setLeftBlinker(false);
+		if (!shouldRightBlinker) {
+			recallLastPattern();
+		}
 	} else {
-		//Blinker On
-		black();
+		//Turn Blinker On
+		setActivePattern(PAT_OVERRIDE);
 		leftBlinkerOn = false;
 		if (shouldRightBlinker) {
 			rightBlinkerOn = false;
@@ -292,10 +302,10 @@ void doLeftBlinker() {
 }
 
 void setRightBlinker(bool on) {
-	for (uint8_t i=0; i<(FRONT_RIGHT_COUNT); i++){
+	for (uint8_t i = FRONT_RIGHT_START; i < FRONT_RIGHT_COUNT; i++){
 		frontRight[i] = (on) ? CRGB::Orange : CRGB::Black;
 	}
-	for (uint8_t i=BODY_RIGHT_START; i<(BODY_RIGHT_END); i++){
+	for (uint8_t i = BODY_RIGHT_START; i < BODY_RIGHT_END; i++){
 		body[i] = (on) ? CRGB::Orange : CRGB::Black;
 	}
 	FastLED.show();
@@ -304,12 +314,14 @@ void setRightBlinker(bool on) {
 void rightBlinker() {
 	shouldRightBlinker = !shouldRightBlinker;
 	if (!shouldRightBlinker) {
-		//Blinker off
-		recallLastPattern();
+		//Turn Blinker off
 		setRightBlinker(false);
+		if (!shouldLeftBlinker) {
+			recallLastPattern();
+		}
 	} else {
-		//Blinker on
-		black();
+		//Turn Blinker on
+		setActivePattern(PAT_OVERRIDE);
 		rightBlinkerOn = false;
 		if (shouldLeftBlinker) {
 			leftBlinkerOn = false;
@@ -385,3 +397,7 @@ void ledLoop() {
 		}
 	}
 }
+//TODO:
+//- turning off one blinker turns off the other.
+//- you can turn on a pattern while a blinker is on.
+//- turning on two blinkers erases the last state.
