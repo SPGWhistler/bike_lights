@@ -8,6 +8,9 @@ const char* password = "365-94-626512";
 bool otaRunning = false;
 
 void otaSetup() {
+  if (otaRunning) {
+    return;
+  }
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
   while (WiFi.waitForConnectResult() != WL_CONNECTED) {

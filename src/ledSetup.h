@@ -2,192 +2,216 @@
 #include <Canrun.h>
 
 //15, 15, 32, 92 (32 + 16 + 14 + 14 + 16)
-#define FLEFT_COUNT 15
-#define FLEFT_PIN 23
-#define FRIGHT_COUNT 15
-#define FRIGHT_PIN 4
-#define MID1_COUNT 92
-#define MID2_COUNT 32
-#define MID1_PIN 19
-#define MID2_PIN 5
-#define MLEFT_COUNT 62
-#define MRIGHT_COUNT 62
+//Front left led strip
+#define FRONT_LEFT_PIN 23
+#define FRONT_LEFT_START 0
+#define FRONT_LEFT_COUNT 15
+const uint FRONT_LEFT_END = FRONT_LEFT_START + FRONT_LEFT_COUNT;
+
+//Front right led strip
+#define FRONT_RIGHT_PIN 4
+#define FRONT_RIGHT_START 0
+#define FRONT_RIGHT_COUNT 15
+const uint FRONT_RIGHT_END = FRONT_RIGHT_START + FRONT_RIGHT_COUNT;
+
+//Body led strip section 1
+#define BODY_SECTION1_PIN 19
+#define BODY_SECTION1_START 0
+#define BODY_SECTION1_COUNT 92
+const uint BODY_SECTION1_END = BODY_SECTION1_START + BODY_SECTION1_COUNT;
+
+//Body led strip section 2
+#define BODY_SECTION2_PIN 5
+#define BODY_SECTION2_START 92
+#define BODY_SECTION2_COUNT 32
+const uint BODY_SECTION2_END = BODY_SECTION2_START + BODY_SECTION2_COUNT;
+
+//Body leds (virtual)
+#define BODY_START 0
+const uint BODY_COUNT = BODY_SECTION1_COUNT + BODY_SECTION2_COUNT;
+const uint BODY_END = BODY_START + BODY_COUNT;
+
+//Body left led strips (virtual)
+#define BODY_LEFT_START 0
+#define BODY_LEFT_COUNT 62
+const uint BODY_LEFT_END = BODY_LEFT_START + BODY_LEFT_COUNT;
+
+//Body right led strips (virtual)
+#define BODY_RIGHT_START 62
+#define BODY_RIGHT_COUNT 62
+const uint BODY_RIGHT_END = BODY_RIGHT_START + BODY_RIGHT_COUNT;
+
+//Rear left led strip (virtual)
+#define REAR_LEFT_START 48
+#define REAR_LEFT_COUNT 14
+const uint REAR_LEFT_END = REAR_LEFT_START + REAR_LEFT_COUNT;
+
+//Rear right led strip (virtual)
+#define REAR_RIGHT_START 62
+#define REAR_RIGHT_COUNT 14
+const uint REAR_RIGHT_END = REAR_RIGHT_START + REAR_RIGHT_COUNT;
+
 
 #define STRIP_TYPE WS2812B
 #define LED_ORDER GRB
 
+#define PAT_MARQUE 1
+#define PAT_SPARKLE 2
+#define PAT_RAINBOW 3
+#define PAT_SOLID 4
+#define PAT_TEST 5
+#define PAT_FIRE 6
+
 Canrun canrun;
 
-const uint MID_COUNT = MID1_COUNT + MID2_COUNT;
+CRGB frontLeft[FRONT_LEFT_COUNT];
+CRGB frontRight[FRONT_RIGHT_COUNT];
+CRGB body[BODY_COUNT];
+CRGB bodyLeft[BODY_LEFT_COUNT]; //virtual
+CRGB bodyRight[BODY_RIGHT_COUNT]; //virtual
+CRGB rearLeft[REAR_LEFT_COUNT]; //virtual
+CRGB rearRight[REAR_RIGHT_COUNT]; //virtual
 
-CRGB fLeft[FLEFT_COUNT];
-CRGB fRight[FRIGHT_COUNT];
-CRGB mid[MID_COUNT];
-
-bool shouldSinelon = false;
-bool shouldSparkle = false;
+uint8_t activePattern = 0;
+uint8_t lastPattern = 0;
 bool shouldRightBlinker = false;
 bool shouldLeftBlinker = false;
-
-/**
- * All a specific color, called internally.
- */
-void doShowColor(CRGB color) {
-	FastLED.showColor(color);
-}
+bool leftBlinkerOn = false;
+bool rightBlinkerOn = false;
 
 /**
  * All off, kill all effects.
  */
 void black() {
 	FastLED.clear(true);
-	doShowColor(CRGB::Black);
-	shouldSparkle = false;
-	shouldSinelon = false;
+	FastLED.showColor(CRGB::Black);
+	lastPattern = activePattern;
+	activePattern = 0;
 	shouldRightBlinker = false;
 	shouldLeftBlinker = false;
 }
 
-/**
- * All a specific color.
- * Four bytes, first is ignored, then R, G, and B values.
- */
-void show_color(byte* bytes) {
+void recallLastPattern() {
+	FastLED.clear(true);
+	FastLED.showColor(CRGB::Black);
+	activePattern = lastPattern;
+	shouldRightBlinker = false;
+	shouldLeftBlinker = false;
+}
+
+void setActivePattern(uint8_t pattern) {
 	black();
+	activePattern = pattern;
+}
+
+/**
+ * Reverse a set of leds.
+ */
+void reverseLeds(CRGB* leds, uint startPos, uint count, uint length) {
+	for (uint i = startPos; i < startPos + (count / 2); i++) {
+		CRGB temp = leds[i];
+		leds[i] = leds[length - (i - startPos) - 1];
+		leds[length - (i - startPos) - 1] = temp;
+	}
+}
+
+void reverseBodySection2() {
+	reverseLeds(body, BODY_SECTION2_START, BODY_SECTION2_COUNT, BODY_COUNT);
+}
+
+void setBrightness(byte* bytes = 0) {
+	uint8_t brightness = 55;
+	FastLED.setBrightness(brightness);
+}
+
+void solidColor(byte* bytes) {
+	setActivePattern(PAT_SOLID);
 	CRGB color;
 	color.r = bytes[1];
 	color.g = bytes[2];
 	color.b = bytes[3];
-	doShowColor(color);
+	FastLED.showColor(color);
 }
 
-/**
- * Reverse the Middle2 leds.
- */
-void reverseMid2() {
-	for (uint i = MID1_COUNT; i < MID1_COUNT + (MID2_COUNT / 2); i++) {
-		CRGB temp = mid[i];
-		mid[i] = mid[MID_COUNT - (i - MID1_COUNT) - 1];
-		mid[MID_COUNT - (i - MID1_COUNT) - 1] = temp;
+uint8_t lastTestPatternColor = 0;
+void doTestPattern() {
+	CRGB color;
+	switch (lastTestPatternColor) {
+		case 0:
+			color = CRGB(255, 0, 0);
+			lastTestPatternColor = 1;
+			break;
+		case 1:
+			color = CRGB(0, 255, 0);
+			lastTestPatternColor = 2;
+			break;
+		case 2:
+			color = CRGB(0, 0, 255);
+			lastTestPatternColor = 3;
+			break;
+		case 3:
+			color = CRGB(255, 255, 255);
+			lastTestPatternColor = 0;
+			break;
 	}
+	FastLED.showColor(color);
 }
 
-/**
- * All red.
- */
-void red(){
-	black();
-	FastLED.showColor(CRGB::Red);
-}
-
-/**
- * All blue.
- */
-void blue() {
-	black();
-	FastLED.showColor(CRGB::Blue);
-}
-
-/**
- * All green.
- */
-void green() {
-	black();
-	FastLED.showColor(CRGB::Green);
-}
-
-/**
- * All white.
- */
-void white() {
-	black();
-	FastLED.showColor(CRGB::White);
-}
-
-/**
- * Turn on sparkle.
- */
-void sparkle() {
-	black();
-	shouldSparkle = true;
-}
-
-/**
- * Called by loop to do the sparkle.
- */
 void doSparkle( fract8 chanceOfGlitter) {
 	FastLED.clear(true);
 	if( random8() < chanceOfGlitter) {
-		fLeft[ random16(FLEFT_COUNT) ] += CRGB::White;
-		fRight[ random16(FRIGHT_COUNT) ] += CRGB::White;
-		mid[ random16(MID_COUNT) ] += CRGB::White;
+		frontLeft[ random16(FRONT_LEFT_COUNT) ] += CRGB::White;
+		frontRight[ random16(FRONT_RIGHT_COUNT) ] += CRGB::White;
+		body[ random16(BODY_COUNT) ] += CRGB::White;
 	}
 	FastLED.show();
 }
 
-/**
- * All rainbow.
- */
-void rainbow() {
-	black();
-	fill_rainbow(fLeft, FLEFT_COUNT, 0);
-	fill_rainbow(fRight, FRIGHT_COUNT, 0);
-	fill_rainbow(mid, MID_COUNT, 0);
+#define COOLING 55
+#define SPARKING 120
+byte heat[124];
+void doFire(CRGB* leds, int count, bool reverse, byte* heat) {
+// Array of temperature readings at each simulation cell
+  //static byte heat[count];
+
+  // Step 1.  Cool down every cell a little
+    for( int i = 0; i < count; i++) {
+      heat[i] = qsub8( heat[i],  random8(0, ((COOLING * 10) / count) + 2));
+    }
+  
+    // Step 2.  Heat from each cell drifts 'up' and diffuses a little
+    for( int k= count - 1; k >= 2; k--) {
+      heat[k] = (heat[k - 1] + heat[k - 2] + heat[k - 2] ) / 3;
+    }
+    
+    // Step 3.  Randomly ignite new 'sparks' of heat near the bottom
+    if( random8() < SPARKING ) {
+      int y = random8(7);
+      heat[y] = qadd8( heat[y], random8(160,255) );
+    }
+
+    // Step 4.  Map from heat cells to LED colors
+    for( int j = 0; j < count; j++) {
+      CRGB color = HeatColor( heat[j]);
+      int pixelnumber;
+      if( reverse ) {
+        pixelnumber = (count-1) - j;
+      } else {
+        pixelnumber = j;
+      }
+      leds[pixelnumber] = color;
+    }
 	FastLED.show();
 }
 
-void setLeftBlinker(bool on) {
-	for (uint8_t i=0; i<(FLEFT_COUNT); i++){
-		fLeft[i] = (on) ? CRGB::Orange : CRGB::Black;
-	}
-	for (uint8_t i=0; i<(MLEFT_COUNT); i++){
-		mid[i] = (on) ? CRGB::Orange : CRGB::Black;
-	}
+uint8_t lastHue = 0;
+void doRainbow() {
+	fill_rainbow(frontLeft, FRONT_LEFT_COUNT, lastHue);
+	fill_rainbow(frontRight, FRONT_RIGHT_COUNT, lastHue);
+	fill_rainbow(body, BODY_COUNT, lastHue);
+	reverseBodySection2();
+	lastHue++;
 	FastLED.show();
-}
-
-void leftBlinker() {
-	shouldLeftBlinker = !shouldLeftBlinker;
-	if (!shouldLeftBlinker) {
-		setLeftBlinker(false);
-	}
-}
-
-bool leftBlinkerOn = false;
-void doLeftBlinker() {
-	setLeftBlinker(leftBlinkerOn);
-	leftBlinkerOn = !leftBlinkerOn;
-}
-
-void setRightBlinker(bool on) {
-	for (uint8_t i=0; i<(FRIGHT_COUNT); i++){
-		fRight[i] = (on) ? CRGB::Orange : CRGB::Black;
-	}
-	for (uint8_t i=MLEFT_COUNT; i<(MID_COUNT); i++){
-		mid[i] = (on) ? CRGB::Orange : CRGB::Black;
-	}
-	FastLED.show();
-}
-
-void rightBlinker() {
-	shouldRightBlinker = !shouldRightBlinker;
-	if (!shouldRightBlinker) {
-		setRightBlinker(false);
-	}
-}
-
-bool rightBlinkerOn = false;
-void doRightBlinker() {
-	setRightBlinker(rightBlinkerOn);
-	rightBlinkerOn = !rightBlinkerOn;
-}
-
-/**
- * Turn on sinelon.
- */
-void sinelon() {
-	black();
-	shouldSinelon = true;
 }
 
 uint16_t holdTime = 50;  // Milliseconds to hold position before advancing.
@@ -204,7 +228,7 @@ int16_t pos;                // Pixel position.
 int8_t advance = -1*width;  // Stores the advance amount.
 uint8_t color;              // Stores a hue color.
 
-void cylonLoop(CRGB* leds, int numLeds) {
+void doMarque(CRGB* leds, int numLeds) {
   EVERY_N_SECONDS(5){  // Demo: Change direction every N seconds.
     delta = -1*delta;
   }
@@ -214,7 +238,7 @@ void cylonLoop(CRGB* leds, int numLeds) {
   }
 
   EVERY_N_MILLISECONDS(holdTime){  // Advance pixels to next position.
-	reverseMid2();
+	reverseBodySection2();
     // Advance pixel postion down strip, and rollover if needed.
     advance = (advance + delta + numLeds) % numLeds;
     // Fade out tail.
@@ -231,54 +255,126 @@ void cylonLoop(CRGB* leds, int numLeds) {
         leds[pos] = CHSV(color,255,255);
       }
     }
-	reverseMid2();
+	reverseBodySection2();
     FastLED.show();
   }
 }
 
-void setBrightness(byte* bytes = 0) {
-	/*
-	uint8_t brightness = uint8_t(
-            (unsigned char)(bytes[0]) << 24 |
-            (unsigned char)(bytes[1]) << 16 |
-            (unsigned char)(bytes[2]) << 8 |
-            (unsigned char)(bytes[3]));
-			*/
-	uint8_t brightness = 55;
-	FastLED.setBrightness(brightness);
+void setLeftBlinker(bool on) {
+	for (uint8_t i=0; i<(FRONT_LEFT_COUNT); i++){
+		frontLeft[i] = (on) ? CRGB::Orange : CRGB::Black;
+	}
+	for (uint8_t i=0; i<(BODY_LEFT_COUNT); i++){
+		body[i] = (on) ? CRGB::Orange : CRGB::Black;
+	}
+	FastLED.show();
 }
+
+void leftBlinker() {
+	shouldLeftBlinker = !shouldLeftBlinker;
+	if (!shouldLeftBlinker) {
+		//Blinker Off
+		recallLastPattern();
+		setLeftBlinker(false);
+	} else {
+		//Blinker On
+		black();
+		leftBlinkerOn = false;
+		if (shouldRightBlinker) {
+			rightBlinkerOn = false;
+		}
+	}
+}
+
+void doLeftBlinker() {
+	setLeftBlinker(leftBlinkerOn);
+	leftBlinkerOn = !leftBlinkerOn;
+}
+
+void setRightBlinker(bool on) {
+	for (uint8_t i=0; i<(FRONT_RIGHT_COUNT); i++){
+		frontRight[i] = (on) ? CRGB::Orange : CRGB::Black;
+	}
+	for (uint8_t i=BODY_RIGHT_START; i<(BODY_RIGHT_END); i++){
+		body[i] = (on) ? CRGB::Orange : CRGB::Black;
+	}
+	FastLED.show();
+}
+
+void rightBlinker() {
+	shouldRightBlinker = !shouldRightBlinker;
+	if (!shouldRightBlinker) {
+		//Blinker off
+		recallLastPattern();
+		setRightBlinker(false);
+	} else {
+		//Blinker on
+		black();
+		rightBlinkerOn = false;
+		if (shouldLeftBlinker) {
+			leftBlinkerOn = false;
+		}
+	}
+}
+
+void doRightBlinker() {
+	setRightBlinker(rightBlinkerOn);
+	rightBlinkerOn = !rightBlinkerOn;
+}
+
 
 /**
  * Setup.
  */
 void ledSetup() {
 	//Front Left (15 leds)
-	FastLED.addLeds<STRIP_TYPE, FLEFT_PIN, LED_ORDER>(fLeft, FLEFT_COUNT).setCorrection(TypicalSMD5050);
+	FastLED.addLeds<STRIP_TYPE, FRONT_LEFT_PIN, LED_ORDER>(frontLeft, FRONT_LEFT_COUNT).setCorrection(TypicalSMD5050);
 	//Front Right (15 leds)
-	FastLED.addLeds<STRIP_TYPE, FRIGHT_PIN, LED_ORDER>(fRight, FRIGHT_COUNT).setCorrection(TypicalSMD5050);
+	FastLED.addLeds<STRIP_TYPE, FRONT_RIGHT_PIN, LED_ORDER>(frontRight, FRONT_RIGHT_COUNT).setCorrection(TypicalSMD5050);
 	//Middle1 (92 leds, starting at index 0 of mid)
-	FastLED.addLeds<STRIP_TYPE, MID1_PIN, LED_ORDER>(mid, 0, MID1_COUNT).setCorrection(TypicalSMD5050);
+	FastLED.addLeds<STRIP_TYPE, BODY_SECTION1_PIN, LED_ORDER>(body, 0, BODY_SECTION1_COUNT).setCorrection(TypicalSMD5050);
 	//Middle2 (32 leds, starting at index 92 of mid)
-	FastLED.addLeds<STRIP_TYPE, MID2_PIN, LED_ORDER>(mid, MID1_COUNT, MID2_COUNT).setCorrection(TypicalSMD5050);
+	FastLED.addLeds<STRIP_TYPE, BODY_SECTION2_PIN, LED_ORDER>(body, BODY_SECTION2_START, BODY_SECTION2_COUNT).setCorrection(TypicalSMD5050);
 
 	setBrightness();
-	black();
+	canrun.setupDelay('t', 1000);
 	canrun.setupDelay('s', 100);
+	canrun.setupDelay('r', 50);
+	canrun.setupDelay('f', 16);
 	canrun.setupDelay('b', 100);
-	sinelon();
+	setActivePattern(PAT_MARQUE);
 }
 
 /**
  * Loop.
  */
 void ledLoop() {
-	if (canrun.run('s')) {
-		if (shouldSparkle == true) {
-			doSparkle(100);
-		}
-	}
-	if (shouldSinelon == true) {
-		cylonLoop(mid, MID_COUNT);
+	switch (activePattern) {
+		case PAT_TEST:
+			if (canrun.run('t')) {
+				doTestPattern();
+			}
+			break;
+		case PAT_SPARKLE:
+			if (canrun.run('s')) {
+				doSparkle(200);
+			}
+			break;
+		case PAT_MARQUE:
+			doMarque(body, BODY_COUNT);
+			break;
+		case PAT_RAINBOW:
+			if (canrun.run('r')) {
+				doRainbow();
+			}
+			break;
+		case PAT_FIRE:
+			if (canrun.run('f')) {
+				doFire(body, BODY_COUNT, true, heat);
+			}
+			break;
+		default:
+			break;
 	}
 	if (canrun.run('b')) {
 		if (shouldRightBlinker == true) {

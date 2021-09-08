@@ -17,36 +17,28 @@ void loop(void) {
 	if (bytes[0]) {
 		switch (bytes[0]) {
 			case 0x28:
-				btPrintln("show color");
-				show_color(bytes);
+				btPrintln("solid color");
+				solidColor(bytes);
 				break;
 			case 0x30:
 				btPrintln("black");
 				black();
 				break;
 			case 0x31:
-				btPrintln("red");
-				red();
+				btPrintln("test pattern");
+				setActivePattern(PAT_TEST);
 				break;
 			case 0x32:
-				btPrintln("green");
-				green();
-				break;
-			case 0x33:
-				btPrintln("blue");
-				blue();
-				break;
-			case 0x34:
-				btPrintln("white");
-				white();
+				btPrintln("fire");
+				setActivePattern(PAT_FIRE);
 				break;
 			case 0x35:
 				btPrintln("rainbow");
-				rainbow();
+				setActivePattern(PAT_RAINBOW);
 				break;
 			case 0x36:
 				btPrintln("sparkle");
-				sparkle();
+				setActivePattern(PAT_SPARKLE);
 				break;
 			case 0x37:
 				btPrintln("set brightness");
@@ -54,7 +46,7 @@ void loop(void) {
 				break;
 			case 0x38:
 				btPrintln("sinelon");
-				sinelon();
+				setActivePattern(PAT_MARQUE);
 				break;
 			case 0x39:
 				btPrintln("otaSetup");
