@@ -74,8 +74,8 @@ CRGB bodyRight[BODY_RIGHT_COUNT]; //virtual
 CRGB rearLeft[REAR_LEFT_COUNT]; //virtual
 CRGB rearRight[REAR_RIGHT_COUNT]; //virtual
 
-uint8_t activePattern = 0;
-uint8_t lastPattern = 0;
+uint8_t activePattern = PAT_OFF;
+uint8_t lastPattern = PAT_OFF;
 bool shouldRightBlinker = false;
 bool shouldLeftBlinker = false;
 bool leftBlinkerOn = false;
@@ -98,6 +98,7 @@ void recallLastPattern() {
 void setActivePattern(uint8_t pattern) {
 	black();
 	if (pattern != PAT_OVERRIDE) {
+		if (activePattern == PAT_OVERRIDE) return;
 		lastPattern = pattern;
 		SerialBT.println("Saving to Last Pattern:");
 		SerialBT.println(lastPattern);
@@ -132,6 +133,9 @@ void turnOff() {
 	setActivePattern(PAT_OFF);
 }
 
+//TODO This pattern wont save because it is literally only set once when this method is called.
+//If I wanted to make this save, I'd need to convert this into a 'doSolidColor' function, and
+//add a 'setSolidColor' function which accepted the bytes and saved them.
 void solidColor(byte* bytes) {
 	setActivePattern(PAT_SOLID);
 	CRGB color;
@@ -178,27 +182,20 @@ void doSparkle( fract8 chanceOfGlitter) {
 #define COOLING 55
 #define SPARKING 120
 byte heat[124];
+//TODO This looks crappy because its just one fire for all the leds.
+//It would be better to convert this to render a fire on each virtual set
+//of leds. That requires reworking how the 'heat' variable above is used.
 void doFire(CRGB* leds, int count, bool reverse, byte* heat) {
-// Array of temperature readings at each simulation cell
-  //static byte heat[count];
-
-  // Step 1.  Cool down every cell a little
     for( int i = 0; i < count; i++) {
       heat[i] = qsub8( heat[i],  random8(0, ((COOLING * 10) / count) + 2));
     }
-  
-    // Step 2.  Heat from each cell drifts 'up' and diffuses a little
     for( int k= count - 1; k >= 2; k--) {
       heat[k] = (heat[k - 1] + heat[k - 2] + heat[k - 2] ) / 3;
     }
-    
-    // Step 3.  Randomly ignite new 'sparks' of heat near the bottom
     if( random8() < SPARKING ) {
       int y = random8(7);
       heat[y] = qadd8( heat[y], random8(160,255) );
     }
-
-    // Step 4.  Map from heat cells to LED colors
     for( int j = 0; j < count; j++) {
       CRGB color = HeatColor( heat[j]);
       int pixelnumber;
@@ -226,16 +223,12 @@ uint16_t holdTime = 50;  // Milliseconds to hold position before advancing.
 uint8_t spacing = 20;      // Sets pixel spacing. [Use 2 or greater]
 int8_t delta = 1;         // Sets forward or backwards direction amount. (Can be negative.)
 uint8_t width = 1;        // Can increase the number of pixels (width) of the chase. [1 or greater]
-
 uint8_t fadeRate = 75;   // How fast to fade out tail. [0-255]
-
 uint8_t hue = 180;        // Starting color.
 uint8_t hue2_shift = 20;  // Hue shift for secondary color.  Use 0 for no shift. [0-255]
-
 int16_t pos;                // Pixel position.
 int8_t advance = -1*width;  // Stores the advance amount.
 uint8_t color;              // Stores a hue color.
-
 void doMarque(CRGB* leds, int numLeds) {
   EVERY_N_SECONDS(5){  // Demo: Change direction every N seconds.
     delta = -1*delta;
@@ -398,6 +391,4 @@ void ledLoop() {
 	}
 }
 //TODO:
-//- turning off one blinker turns off the other.
 //- you can turn on a pattern while a blinker is on.
-//- turning on two blinkers erases the last state.
