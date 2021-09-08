@@ -181,26 +181,24 @@ void sparkleLoop( fract8 chanceOfGlitter) {
 
 #define COOLING 55
 #define SPARKING 120
-byte heat[124];
-//TODO This looks crappy because its just one fire for all the leds.
-//It would be better to convert this to render a fire on each virtual set
-//of leds. That requires reworking how the 'heat' variable above is used.
-void fireLoop(CRGB* leds, int count, bool reverse, byte* heat) {
-    for( int i = 0; i < count; i++) {
+byte heat[BODY_COUNT];
+void fireLoop(CRGB* leds, uint start, uint end, bool reverse, byte* heat) {
+	uint count = end - start;
+    for( uint i = start; i < end; i++) {
       heat[i] = qsub8( heat[i],  random8(0, ((COOLING * 10) / count) + 2));
     }
-    for( int k= count - 1; k >= 2; k--) {
+    for( uint k = end - 1; k >= start + 2; k--) {
       heat[k] = (heat[k - 1] + heat[k - 2] + heat[k - 2] ) / 3;
     }
     if( random8() < SPARKING ) {
-      int y = random8(7);
+      uint y = random8(7);
       heat[y] = qadd8( heat[y], random8(160,255) );
     }
-    for( int j = 0; j < count; j++) {
+    for( uint j = start; j < end; j++) {
       CRGB color = HeatColor( heat[j]);
-      int pixelnumber;
+      uint pixelnumber;
       if( reverse ) {
-        pixelnumber = (count-1) - j;
+        pixelnumber = (end - 1) - j;
       } else {
         pixelnumber = j;
       }
@@ -275,7 +273,6 @@ void setRightBlinker(bool on) {
 	setBlinker(on, frontRight, FRONT_RIGHT_START, FRONT_RIGHT_END);
 	setBlinker(on, body, BODY_RIGHT_START, BODY_RIGHT_END);
 }
-
 void blinkerLoop() {
 	if (shouldRightBlinker) {
 		setRightBlinker(rightBlinkerOn);
@@ -363,7 +360,8 @@ void ledLoop() {
 			break;
 		case PAT_FIRE:
 			if (canrun.run('f')) {
-				fireLoop(body, BODY_COUNT, true, heat);
+				fireLoop(body, REAR_LEFT_START, REAR_LEFT_END, false, heat);
+				fireLoop(body, REAR_RIGHT_START, REAR_RIGHT_END, true, heat);
 			}
 			break;
 		default:
