@@ -10,11 +10,11 @@
 class Canrun {
   public:
     Canrun();
-	void setupDelay(char key, unsigned long delay);
+	void setupDelay(char key, uint16_t delay);
 	bool run(char key);
   private:
-	std::unordered_map<char, unsigned long> _delays{};
-	std::unordered_map<char, unsigned long> _times{};
+	std::unordered_map<char, uint16_t> _delays{};
+	std::unordered_map<char, uint16_t> _times{};
 };
 
 #endif

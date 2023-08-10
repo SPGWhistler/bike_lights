@@ -7,8 +7,13 @@ void btSetup() {
   SerialBT.setTimeout(50);
 }
 
-void btLoop(byte* bytes) {
+bool btLoop(byte* bytes) {
 	if (SerialBT.available()) {
 		SerialBT.readBytes( bytes, 4);
 	}
+  if (SerialBT.hasClient()) {
+    return true;
+  } else {
+    return false;
+  }
 }

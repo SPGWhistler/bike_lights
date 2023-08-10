@@ -8,20 +8,32 @@
 #include <unordered_map>
 
 Canrun::Canrun() {
-	std::unordered_map<char, unsigned long> _delays{};
-	std::unordered_map<char, unsigned long> _times{};
+	std::unordered_map<char, uint16_t> _delays{};
+	std::unordered_map<char, uint16_t> _times{};
 }
 
-void Canrun::setupDelay(char key, unsigned long delay) {
+/**
+ * This is called to setup the delay with a key and a delay.
+ * You can also call it to change a delay.
+ * If you set delay to 0, run will always return false.
+*/
+void Canrun::setupDelay(char key, uint16_t delay) {
 	_delays[key] = delay;
 	_times[key] = 0;
 }
 
+/**
+ * This is called on every loop with the key.
+ * If it returns true, your code should execute.
+ * If it returns false, you should not execute your code.
+*/
 bool Canrun::run(char key) {
-	unsigned long currentMillis = millis();
-	if (currentMillis - _times[key] >= _delays[key]) {
-		_times[key] = currentMillis;
-		return true;
-	}
+	uint16_t currentMillis = millis();
+  if (_delays[key] > 0) {
+    if (currentMillis - _times[key] >= _delays[key]) {
+      _times[key] = currentMillis;
+      return true;
+    }
+  }
 	return false;
 }

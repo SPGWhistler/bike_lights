@@ -1,59 +1,11 @@
 #include <FastLED.h>
 #include <Canrun.h>
+#include <Preferences.h>
 
-//15, 15, 32, 92 (32 + 16 + 14 + 14 + 16)
-//Front left led strip
-#define FRONT_LEFT_PIN 23
-#define FRONT_LEFT_START 0
-#define FRONT_LEFT_COUNT 15
-const uint FRONT_LEFT_END = FRONT_LEFT_START + FRONT_LEFT_COUNT;
-
-//Front right led strip
-#define FRONT_RIGHT_PIN 4
-#define FRONT_RIGHT_START 0
-#define FRONT_RIGHT_COUNT 15
-const uint FRONT_RIGHT_END = FRONT_RIGHT_START + FRONT_RIGHT_COUNT;
-
-//Body led strip section 1
-#define BODY_SECTION1_PIN 19
-#define BODY_SECTION1_START 0
-#define BODY_SECTION1_COUNT 92
-const uint BODY_SECTION1_END = BODY_SECTION1_START + BODY_SECTION1_COUNT;
-
-//Body led strip section 2
-#define BODY_SECTION2_PIN 5
-#define BODY_SECTION2_START 92
-#define BODY_SECTION2_COUNT 32
-const uint BODY_SECTION2_END = BODY_SECTION2_START + BODY_SECTION2_COUNT;
-
-//Body leds (virtual)
-#define BODY_START 0
-const uint BODY_COUNT = BODY_SECTION1_COUNT + BODY_SECTION2_COUNT;
-const uint BODY_END = BODY_START + BODY_COUNT;
-
-//Body left led strips (virtual)
-#define BODY_LEFT_START 0
-#define BODY_LEFT_COUNT 62
-const uint BODY_LEFT_END = BODY_LEFT_START + BODY_LEFT_COUNT;
-
-//Body right led strips (virtual)
-#define BODY_RIGHT_START 62
-#define BODY_RIGHT_COUNT 62
-const uint BODY_RIGHT_END = BODY_RIGHT_START + BODY_RIGHT_COUNT;
-
-//Rear left led strip (virtual)
-#define REAR_LEFT_START 48
-#define REAR_LEFT_COUNT 14
-const uint REAR_LEFT_END = REAR_LEFT_START + REAR_LEFT_COUNT;
-
-//Rear right led strip (virtual)
-#define REAR_RIGHT_START 62
-#define REAR_RIGHT_COUNT 14
-const uint REAR_RIGHT_END = REAR_RIGHT_START + REAR_RIGHT_COUNT;
-
-
-#define STRIP_TYPE WS2812B
-#define LED_ORDER GRB
+#define PIN 5
+#define LED_COUNT 100
+#define STRIP_TYPE WS2811
+#define LED_ORDER RGB
 
 const uint8_t PAT_OVERRIDE = 0;
 const uint8_t PAT_OFF = 1;
@@ -65,21 +17,18 @@ const uint8_t PAT_TEST = 6;
 const uint8_t PAT_FIRE = 7;
 
 Canrun canrun;
+Preferences preferences;
 
-CRGB frontLeft[FRONT_LEFT_COUNT];
-CRGB frontRight[FRONT_RIGHT_COUNT];
-CRGB body[BODY_COUNT];
-CRGB bodyLeft[BODY_LEFT_COUNT]; //virtual
-CRGB bodyRight[BODY_RIGHT_COUNT]; //virtual
-CRGB rearLeft[REAR_LEFT_COUNT]; //virtual
-CRGB rearRight[REAR_RIGHT_COUNT]; //virtual
+CRGB leds[LED_COUNT];
 
+uint16_t builtInLedFlashMS = 1000;
 uint8_t activePattern = PAT_OFF;
 uint8_t lastPattern = PAT_OFF;
 bool shouldRightBlinker = false;
 bool shouldLeftBlinker = false;
 bool leftBlinkerOn = false;
 bool rightBlinkerOn = false;
+
 
 //Called internally only to temporarily erase leds.
 //See turnOff() below to kill the running pattern.
@@ -106,6 +55,7 @@ void setActivePattern(uint8_t pattern) {
 		SerialBT.println("Not to saving pattern.");
 	}
 	activePattern = pattern;
+  preferences.putUInt("pattern", pattern);
 }
 
 /**
@@ -120,12 +70,50 @@ void reverseLeds(CRGB* leds, uint startPos, uint count, uint length) {
 }
 
 void reverseBodySection2() {
-	reverseLeds(body, BODY_SECTION2_START, BODY_SECTION2_COUNT, BODY_COUNT);
+	//reverseLeds(body, BODY_SECTION2_START, BODY_SECTION2_COUNT, BODY_COUNT);
 }
 
-void setBrightness(byte* bytes = 0) {
-	uint8_t brightness = 55;
-	FastLED.setBrightness(brightness);
+void saveBrightness() {
+  preferences.putUInt("bright", FastLED.getBrightness());
+}
+
+void setBrightness(byte* bytes) {
+	FastLED.setBrightness(int(bytes[1]));
+  saveBrightness();
+}
+void increaseBrightness() {
+  int cur = FastLED.getBrightness();
+  if (cur < 10) {
+    cur = cur + 1;
+  } else if (cur < 50) {
+    cur = cur + 3;
+  } else if (cur < 128) {
+    cur = cur + 5;
+  } else {
+    cur = cur + 10;
+  }
+  if (cur > 255) {
+    cur = 255;
+  }
+	FastLED.setBrightness(cur);
+  saveBrightness();
+}
+void decreaseBrightness() {
+  int cur = FastLED.getBrightness();
+  if (cur < 10) {
+    cur = cur - 1;
+  } else if (cur < 50) {
+    cur = cur - 3;
+  } else if (cur < 128) {
+    cur = cur - 5;
+  } else {
+    cur = cur - 10;
+  }
+  if (cur < 0) {
+    cur = 0;
+  }
+	FastLED.setBrightness(cur);
+  saveBrightness();
 }
 
 //Called externally to turn off the leds and kill the pattern.
@@ -143,6 +131,33 @@ void solidColor(byte* bytes) {
 	color.g = bytes[2];
 	color.b = bytes[3];
 	FastLED.showColor(color);
+}
+
+bool lastBuiltInLedState = false;
+void setBuiltInLedFlashRate(uint16_t rate) {
+  canrun.setupDelay('i', rate);
+}
+
+void turnOffBuiltInLed() {
+  canrun.setupDelay('i', 0);
+  digitalWrite(LED_BUILTIN, LOW);
+  lastBuiltInLedState = false;
+}
+
+void turnOnBuiltInLed() {
+  canrun.setupDelay('i', 0);
+  digitalWrite(LED_BUILTIN, HIGH);
+  lastBuiltInLedState = true;
+}
+
+void builtInLedFlashLoop() {
+  if (lastBuiltInLedState == false) {
+    digitalWrite(LED_BUILTIN, HIGH);
+    lastBuiltInLedState = true;
+  } else {
+    digitalWrite(LED_BUILTIN, LOW);
+    lastBuiltInLedState = false;
+  }
 }
 
 uint8_t lastTestPatternColor = 0;
@@ -169,19 +184,17 @@ void testPatternLoop() {
 	FastLED.showColor(color);
 }
 
-void sparkleLoop( fract8 chanceOfGlitter) {
-	FastLED.clear(true);
+void sparkleLoop( uint8_t chanceOfGlitter) {
+	FastLED.clear(true); //This makes this method not work - it seems to clear the data after show is executed or something
 	if( random8() < chanceOfGlitter) {
-		frontLeft[ random16(FRONT_LEFT_COUNT) ] += CRGB::White;
-		frontRight[ random16(FRONT_RIGHT_COUNT) ] += CRGB::White;
-		body[ random16(BODY_COUNT) ] += CRGB::White;
+    leds[ random16(LED_COUNT) ] = CRGB::White;
 	}
 	FastLED.show();
 }
 
 #define COOLING 55
 #define SPARKING 120
-byte heat[BODY_COUNT];
+byte heat[LED_COUNT];
 void fireLoop(CRGB* leds, uint start, uint end, bool reverse, byte* heat) {
 	uint count = end - start;
     for( uint i = start; i < end; i++) {
@@ -209,9 +222,7 @@ void fireLoop(CRGB* leds, uint start, uint end, bool reverse, byte* heat) {
 
 uint8_t lastHue = 0;
 void rainbowLoop() {
-	fill_rainbow(frontLeft, FRONT_LEFT_COUNT, lastHue);
-	fill_rainbow(frontRight, FRONT_RIGHT_COUNT, lastHue);
-	fill_rainbow(body, BODY_COUNT, lastHue);
+	fill_rainbow(leds, LED_COUNT, lastHue);
 	reverseBodySection2();
 	lastHue++;
 	FastLED.show();
@@ -266,12 +277,12 @@ void setBlinker(bool on, CRGB* leds, uint8_t start, uint8_t end) {
 	FastLED.show();
 }
 void setLeftBlinker(bool on) {
-	setBlinker(on, frontLeft, FRONT_LEFT_START, FRONT_LEFT_END);
-	setBlinker(on, body, BODY_LEFT_START, BODY_LEFT_END);
+	//setBlinker(on, frontLeft, FRONT_LEFT_START, FRONT_LEFT_END);
+	//setBlinker(on, body, BODY_LEFT_START, BODY_LEFT_END);
 }
 void setRightBlinker(bool on) {
-	setBlinker(on, frontRight, FRONT_RIGHT_START, FRONT_RIGHT_END);
-	setBlinker(on, body, BODY_RIGHT_START, BODY_RIGHT_END);
+	//setBlinker(on, frontRight, FRONT_RIGHT_START, FRONT_RIGHT_END);
+	//setBlinker(on, body, BODY_RIGHT_START, BODY_RIGHT_END);
 }
 void blinkerLoop() {
 	if (shouldRightBlinker) {
@@ -313,30 +324,31 @@ void rightBlinker() {
 }
 
 
+
+
 /**
  * Setup.
  */
 void ledSetup() {
-	//Front Left (15 leds)
-	FastLED.addLeds<STRIP_TYPE, FRONT_LEFT_PIN, LED_ORDER>(frontLeft, FRONT_LEFT_COUNT).setCorrection(TypicalSMD5050);
-	//Front Right (15 leds)
-	FastLED.addLeds<STRIP_TYPE, FRONT_RIGHT_PIN, LED_ORDER>(frontRight, FRONT_RIGHT_COUNT).setCorrection(TypicalSMD5050);
-	//Middle1 (92 leds, starting at index 0 of mid)
-	FastLED.addLeds<STRIP_TYPE, BODY_SECTION1_PIN, LED_ORDER>(body, 0, BODY_SECTION1_COUNT).setCorrection(TypicalSMD5050);
-	//Middle2 (32 leds, starting at index 92 of mid)
-	FastLED.addLeds<STRIP_TYPE, BODY_SECTION2_PIN, LED_ORDER>(body, BODY_SECTION2_START, BODY_SECTION2_COUNT).setCorrection(TypicalSMD5050);
+	FastLED.addLeds<STRIP_TYPE, PIN, LED_ORDER>(leds, LED_COUNT).setCorrection(TypicalSMD5050);
 
-	setBrightness();
+  preferences.begin("bikelights", false);
+
+  uint8_t brightInt = preferences.getUInt("bright", 255);
+  byte bright[2] = {0, (byte) brightInt};
+  setBrightness(bright);
 	canrun.setupDelay('t', 1000);
-	canrun.setupDelay('s', 100);
+	canrun.setupDelay('s', 1000);
 	canrun.setupDelay('r', 50);
 	canrun.setupDelay('f', 16);
 	canrun.setupDelay('b', 100);
-	setActivePattern(PAT_MARQUE);
+  setBuiltInLedFlashRate(1);
+	setActivePattern(preferences.getUInt("pattern", PAT_MARQUE));
 }
 
 /**
  * Loop.
+ * High frequency code here.
  */
 void ledLoop() {
 	switch (activePattern) {
@@ -347,11 +359,11 @@ void ledLoop() {
 			break;
 		case PAT_SPARKLE:
 			if (canrun.run('s')) {
-				sparkleLoop(200);
+				sparkleLoop(255);
 			}
 			break;
 		case PAT_MARQUE:
-			marqueLoop(body, BODY_COUNT);
+			marqueLoop(leds, LED_COUNT);
 			break;
 		case PAT_RAINBOW:
 			if (canrun.run('r')) {
@@ -360,8 +372,7 @@ void ledLoop() {
 			break;
 		case PAT_FIRE:
 			if (canrun.run('f')) {
-				fireLoop(body, REAR_LEFT_START, REAR_LEFT_END, false, heat);
-				fireLoop(body, REAR_RIGHT_START, REAR_RIGHT_END, true, heat);
+				fireLoop(leds, 0, LED_COUNT, true, heat);
 			}
 			break;
 		default:
@@ -370,4 +381,7 @@ void ledLoop() {
 	if (canrun.run('b')) {
 		blinkerLoop();
 	}
+  if (canrun.run('i')) {
+    builtInLedFlashLoop();
+  }
 }
