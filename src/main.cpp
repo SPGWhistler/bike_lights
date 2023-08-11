@@ -2,23 +2,34 @@
 #include "otaSetup.h"
 #include "btSetup.h"
 #include "ledSetup.h"
+#include "common.h"
 
 #ifndef LED_BUILTIN
     #define LED_BUILTIN 2
 #endif
 
-uint8_t lastOtaState = 255;
-uint8_t curOtaState = 0;
-bool lastHasClient = false;
+uint8_t lastOtaStatus = 255;
+u_int8_t otaStatus = 0;
+bool lastHasClient = true;
 bool curHasClient = false;
+bool changed = false;
 
-void setup(void) {
-  pinMode(LED_BUILTIN, OUTPUT);
-  btSetup();
-  ledSetup();
+TaskHandle_t Task1;
+
+
+//Task1code:
+void Task1code( void * pvParameters ){
+  for(;;){
+	  ledLoop();
+    //if (otaStatus == 2 && changed == false) {
+    //  changed = true;
+      //setActivePattern(PAT_TEST);
+    //}
+  } 
 }
 
 void loop(void) {
+  //Blue Tooth Commands
 	byte bytes[4] = {0, 0, 0, 0};
 	curHasClient = btLoop(bytes);
 	if (bytes[0]) { //Only enter here if we've received bytes
@@ -86,11 +97,12 @@ void loop(void) {
 				break;
 		}
 	}
-	ledLoop();
-  curOtaState = otaLoop();
-  if (curOtaState != lastOtaState) { //If ota state changes
-    lastOtaState = curOtaState;
-    switch (curOtaState) {
+
+  //OTA Stuff
+  otaLoop();
+  if (otaStatus != lastOtaStatus) { //If ota state changes
+    lastOtaStatus = otaStatus;
+    switch (otaStatus) {
       case 3: //OTA in error
         setBuiltInLedFlashRate(25);
         SerialBT.println("ota error");
@@ -115,9 +127,11 @@ void loop(void) {
         break;
     }
   }
+
+  //Blue Tooth Status
   if (curHasClient != lastHasClient) { //If bt connection changes
     lastHasClient = curHasClient;
-    if (curOtaState == 0) { //Only show status when ota is not setup
+    if (otaStatus == 0) { //Only show status when ota is not setup
       if (curHasClient) {
         //BT Connected
         //Normal state when riding bike.
@@ -128,4 +142,19 @@ void loop(void) {
       }
     }
   }
+}
+
+void setup(void) {
+  pinMode(LED_BUILTIN, OUTPUT);
+  btSetup();
+  ledSetup();
+  //create a task that will be executed in the Task1code() function, with priority 1 and executed on core 0
+  xTaskCreatePinnedToCore(
+                    Task1code,   /* Task function. */
+                    "Task1",     /* name of task. */
+                    10000,       /* Stack size of task */
+                    NULL,        /* parameter of the task */
+                    1,           /* priority of the task */
+                    &Task1,      /* Task handle to keep track of created task */
+                    0);          /* pin task to core 0 */ 
 }

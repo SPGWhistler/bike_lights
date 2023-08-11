@@ -2,6 +2,7 @@
 #include <ESPmDNS.h>
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
+#include "common.h"
 
 const char* ssid = "whistler";
 const char* password = "365-94-626512";
@@ -9,18 +10,17 @@ const uint8_t STATE_NOTSETUP = 0;
 const uint8_t STATE_WAITING = 1;
 const uint8_t STATE_RUNNING = 2;
 const uint8_t STATE_ERROR = 3;
-uint8_t otaState = STATE_NOTSETUP;
 
-uint8_t otaSetup() {
-  if (otaState > 0) {
-    return otaState;
+void otaSetup() {
+  if (otaStatus > 0) {
+    return;
   }
 
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
   while (WiFi.waitForConnectResult(5000) != WL_CONNECTED) {
     //Serial.println("Connection Failed!");
-	  return otaState;
+	  return;
   }
 
   ArduinoOTA.setPort(3232);
@@ -34,17 +34,17 @@ uint8_t otaSetup() {
 	    } else { // U_SPIFFS
         type = "filesystem";
 	    }
-      otaState = STATE_RUNNING;
+      otaStatus = STATE_RUNNING;
       // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
       //Serial.println("Start updating " + type);
     })
     .onEnd([]() {
       //Serial.println("\nEnd");
-      otaState = STATE_WAITING;
+      otaStatus = STATE_WAITING;
     })
     .onProgress([](unsigned int progress, unsigned int total) {
       //Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
-      otaState = STATE_RUNNING;
+      otaStatus = STATE_RUNNING;
     })
     .onError([](ota_error_t error) {
       //Serial.printf("Error[%u]: ", error);
@@ -53,7 +53,7 @@ uint8_t otaSetup() {
       //else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
       //else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
       //else if (error == OTA_END_ERROR) Serial.println("End Failed");
-      otaState = STATE_ERROR;
+      otaStatus = STATE_ERROR;
     });
 
   ArduinoOTA.begin();
@@ -61,13 +61,12 @@ uint8_t otaSetup() {
   //Serial.println("Ready");
   //Serial.print("IP address: ");
   //Serial.println(WiFi.localIP());
-  otaState = STATE_WAITING;
-  return otaState;
+  otaStatus = STATE_WAITING;
+  return;
 }
 
-uint8_t otaLoop() {
-	if (otaState > 0) {
+void otaLoop() {
+	if (otaStatus > 0) {
 		ArduinoOTA.handle();
   }
-  return otaState;
 }
