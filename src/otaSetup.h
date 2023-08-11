@@ -44,6 +44,7 @@ void otaSetup() {
     })
     .onProgress([](unsigned int progress, unsigned int total) {
       //Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+      otaProgress = (progress / (total / 100));
       otaStatus = STATE_RUNNING;
     })
     .onError([](ota_error_t error) {

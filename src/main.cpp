@@ -10,6 +10,7 @@
 
 uint8_t lastOtaStatus = 255;
 u_int8_t otaStatus = 0;
+u_int8_t otaProgress = 0;
 bool lastHasClient = true;
 bool curHasClient = false;
 bool changed = false;
@@ -21,10 +22,6 @@ TaskHandle_t Task1;
 void Task1code( void * pvParameters ){
   for(;;){
 	  ledLoop();
-    //if (otaStatus == 2 && changed == false) {
-    //  changed = true;
-      //setActivePattern(PAT_TEST);
-    //}
   } 
 }
 

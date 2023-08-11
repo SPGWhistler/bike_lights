@@ -51,11 +51,11 @@ void setActivePattern(uint8_t pattern) {
 		lastPattern = pattern;
 		SerialBT.println("Saving to Last Pattern:");
 		SerialBT.println(lastPattern);
+    preferences.putUInt("pattern", pattern);
 	} else {
 		SerialBT.println("Not to saving pattern.");
 	}
 	activePattern = pattern;
-  preferences.putUInt("pattern", pattern);
 }
 
 /**
@@ -157,6 +157,20 @@ void builtInLedFlashLoop() {
   } else {
     digitalWrite(LED_BUILTIN, LOW);
     lastBuiltInLedState = false;
+  }
+}
+
+void otaUpdateLoop() {
+  if (otaProgress > 0) {
+    if (activePattern != PAT_OVERRIDE) {
+      setActivePattern(PAT_OVERRIDE);
+	    FastLED.setBrightness(50);
+    }
+    for( uint j = 0; j <= otaProgress; j++) {
+      CRGB color = CRGB::Blue;
+      leds[j] = color;
+    }
+	  FastLED.show();
   }
 }
 
@@ -342,6 +356,7 @@ void ledSetup() {
 	canrun.setupDelay('r', 50);
 	canrun.setupDelay('f', 16);
 	canrun.setupDelay('b', 100);
+  canrun.setupDelay('o', 500);
   setBuiltInLedFlashRate(1);
 	setActivePattern(preferences.getUInt("pattern", PAT_MARQUE));
 }
@@ -383,5 +398,8 @@ void ledLoop() {
 	}
   if (canrun.run('i')) {
     builtInLedFlashLoop();
+  }
+  if (canrun.run('o')) {
+    otaUpdateLoop();
   }
 }
