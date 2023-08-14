@@ -13,7 +13,6 @@ u_int8_t otaStatus = 0;
 u_int8_t otaProgress = 0;
 bool lastHasClient = true;
 bool curHasClient = false;
-bool changed = false;
 
 TaskHandle_t Task1;
 
@@ -36,46 +35,20 @@ void loop(void) {
 				solidColor(bytes);
 				break;
 			case 0x30:
-				SerialBT.println("turn off");
-				turnOff();
-				break;
-			case 0x31:
-				SerialBT.println("test pattern");
-				setActivePattern(PAT_TEST);
-				break;
-			case 0x32:
-				SerialBT.println("fire");
-				setActivePattern(PAT_FIRE);
-				break;
-			case 0x33:
-				SerialBT.println("rainbow");
-				setActivePattern(PAT_RAINBOW);
-				break;
-			case 0x34:
-				SerialBT.println("sparkle");
-				setActivePattern(PAT_SPARKLE);
+				SerialBT.println("set pattern");
+				setActivePattern(int(bytes[1]));
 				break;
 			case 0x35:
 				SerialBT.println("decrease brightness");
-				decreaseBrightness();
-        SerialBT.println(FastLED.getBrightness());
+        SerialBT.println(decreaseBrightness());
 				break;
 			case 0x36:
 				SerialBT.println("increase brightness");
-				increaseBrightness();
-        SerialBT.println(FastLED.getBrightness());
+        SerialBT.println(increaseBrightness());
 				break;
 			case 0x37:
 				SerialBT.println("set brightness");
-				setBrightness(bytes);
-				break;
-			case 0x38:
-				SerialBT.println("sinelon");
-				setActivePattern(PAT_MARQUE);
-				break;
-			case 0x39:
-				SerialBT.println("otaSetup");
-				otaSetup();
+				SerialBT.println(setBrightness(int(bytes[1])));
 				break;
 			case 0x40:
 				SerialBT.println("right blinker");
@@ -90,7 +63,15 @@ void loop(void) {
         otaSetup();
 				break;
 			default:
-				//SerialBT.println("undefined");
+				SerialBT.println("Commands (in hex):");
+				SerialBT.println("28 XX XX XX: set color 3 bytes");
+				SerialBT.println("30 XX: set pattern 1 byte");
+				SerialBT.println("35: dec brightness");
+				SerialBT.println("36: inc brightness");
+				SerialBT.println("37: set brightness 1 byte");
+				SerialBT.println("40: right blinker");
+				SerialBT.println("41: left blinker");
+				SerialBT.println("42: enable ota");
 				break;
 		}
 	}
@@ -115,10 +96,12 @@ void loop(void) {
       default: //OTA not setup
         SerialBT.println("ota not setup");
         if (curHasClient) {
+          //BT Connected and OTA not setup
           //Normal state when riding bike.
           turnOnBuiltInLed();
         } else {
           //BT Not Connected and OTA not setup
+          //Alternate state when riding bike.
           turnOffBuiltInLed();
         }
         break;

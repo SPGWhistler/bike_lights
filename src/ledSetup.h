@@ -31,7 +31,7 @@ bool rightBlinkerOn = false;
 
 
 //Called internally only to temporarily erase leds.
-//See turnOff() below to kill the running pattern.
+//Use setActivePattern(PAT_OFF) to kill the running pattern.
 void black() {
 	FastLED.clear(true);
 	FastLED.showColor(CRGB::Black);
@@ -73,15 +73,12 @@ void reverseBodySection2() {
 	//reverseLeds(body, BODY_SECTION2_START, BODY_SECTION2_COUNT, BODY_COUNT);
 }
 
-void saveBrightness() {
-  preferences.putUInt("bright", FastLED.getBrightness());
+int setBrightness(int b = FastLED.getBrightness()) {
+	FastLED.setBrightness(b);
+  preferences.putUInt("bright", b);
+  return b;
 }
-
-void setBrightness(byte* bytes) {
-	FastLED.setBrightness(int(bytes[1]));
-  saveBrightness();
-}
-void increaseBrightness() {
+int increaseBrightness() {
   int cur = FastLED.getBrightness();
   if (cur < 10) {
     cur = cur + 1;
@@ -95,10 +92,9 @@ void increaseBrightness() {
   if (cur > 255) {
     cur = 255;
   }
-	FastLED.setBrightness(cur);
-  saveBrightness();
+  return setBrightness(cur);
 }
-void decreaseBrightness() {
+int decreaseBrightness() {
   int cur = FastLED.getBrightness();
   if (cur < 10) {
     cur = cur - 1;
@@ -112,13 +108,7 @@ void decreaseBrightness() {
   if (cur < 0) {
     cur = 0;
   }
-	FastLED.setBrightness(cur);
-  saveBrightness();
-}
-
-//Called externally to turn off the leds and kill the pattern.
-void turnOff() {
-	setActivePattern(PAT_OFF);
+  return setBrightness(cur);
 }
 
 //TODO This pattern wont save because it is literally only set once when this method is called.
@@ -348,9 +338,7 @@ void ledSetup() {
 
   preferences.begin("bikelights", false);
 
-  uint8_t brightInt = preferences.getUInt("bright", 255);
-  byte bright[2] = {0, (byte) brightInt};
-  setBrightness(bright);
+  setBrightness(preferences.getUInt("bright", 255));
 	canrun.setupDelay('t', 1000);
 	canrun.setupDelay('s', 1000);
 	canrun.setupDelay('r', 50);
