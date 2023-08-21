@@ -8,133 +8,182 @@
     #define LED_BUILTIN 2
 #endif
 
-uint8_t lastOtaStatus = 255;
-u_int8_t otaStatus = 0;
+const int voltage_pin = 33;
+float voltage_value = 0;
+const int low_battery_voltage = 14;
+
+uint8_t lastOtaState = 255;
+u_int8_t otaState = 0;
 u_int8_t otaProgress = 0;
 bool lastHasClient = true;
 bool curHasClient = false;
 
+TaskHandle_t Task0;
 TaskHandle_t Task1;
+TaskHandle_t Task2;
+
+//void test(byte* bytes) {
+//  int n = sizeof(bytes);
+//  char mystr[n + 1];
+//  memcpy(mystr, bytes, n);
+//  mystr[n] = '\0'; // Null-terminate the string
+//  SerialBT.println(mystr);
+//}
 
 
-//Task1code:
-void Task1code( void * pvParameters ){
+//Main Loop:
+//Runs on core 0
+void MainLoopCode( void * pvParameters ){
+  Serial.print("Main Loop running on core ");
+  Serial.println(xPortGetCoreID());
   for(;;){
-	  ledLoop();
-  } 
-}
+    //Blue Tooth Commands
+    byte bytes[4] = {0, 0, 0, 0};
+    curHasClient = btLoop(bytes); //Refactor to not return a value, use global instead
+    if (bytes[0]) { //Only enter here if we've received bytes
+      switch (bytes[0]) {
+        case 0x28: //Requires 3 additional bytes
+          SerialBT.println("solid color");
+          setSolidColorFromBytes(bytes);
+          break;
+        case 0x30: //Requires 1 additional byte
+          SerialBT.println("set pattern");
+          setActivePattern(int(bytes[1]));
+          break;
+        case 0x35:
+          SerialBT.println("decrease brightness");
+          SerialBT.println(decreaseBrightness());
+          break;
+        case 0x36:
+          SerialBT.println("increase brightness");
+          SerialBT.println(increaseBrightness());
+          break;
+        case 0x37: //Requires 1 additional byte
+          SerialBT.println("set brightness");
+          SerialBT.println(setBrightness(int(bytes[1])));
+          break;
+        case 0x38:
+          voltage_value = (analogRead(voltage_pin) * 16.5 ) / (4095);
+          SerialBT.print(voltage_value);
+          SerialBT.println(" volts");
+          break;
+        case 0x42:
+          SerialBT.println("enable OTA");
+          otaSetup(SerialBT, 0);
+          break;
+        case 0x43:
+          SerialBT.println("enable OTA Lexis");
+          otaSetup(SerialBT, 1);
+          break;
+        default:
+          SerialBT.println("Commands (in hex):");
+          SerialBT.println("28 XX XX XX: set color 3 bytes");
+          SerialBT.println("30 XX: set pattern 1 byte");
+          SerialBT.println("35: dec brightness");
+          SerialBT.println("36: inc brightness");
+          SerialBT.println("37: set brightness 1 byte");
+          SerialBT.println("38: get battery voltage");
+          SerialBT.println("42: enable ota");
+          SerialBT.println("43: enable ota lexis");
+          break;
+      }
+    }
 
-void loop(void) {
-  //Blue Tooth Commands
-	byte bytes[4] = {0, 0, 0, 0};
-	curHasClient = btLoop(bytes);
-	if (bytes[0]) { //Only enter here if we've received bytes
-		switch (bytes[0]) {
-			case 0x28:
-				SerialBT.println("solid color");
-				solidColor(bytes);
-				break;
-			case 0x30:
-				SerialBT.println("set pattern");
-				setActivePattern(int(bytes[1]));
-				break;
-			case 0x35:
-				SerialBT.println("decrease brightness");
-        SerialBT.println(decreaseBrightness());
-				break;
-			case 0x36:
-				SerialBT.println("increase brightness");
-        SerialBT.println(increaseBrightness());
-				break;
-			case 0x37:
-				SerialBT.println("set brightness");
-				SerialBT.println(setBrightness(int(bytes[1])));
-				break;
-			case 0x40:
-				SerialBT.println("right blinker");
-				rightBlinker();
-				break;
-			case 0x41:
-				SerialBT.println("left blinker");
-				leftBlinker();
-				break;
-			case 0x42:
-				SerialBT.println("enable OTA");
-        otaSetup();
-				break;
-			default:
-				SerialBT.println("Commands (in hex):");
-				SerialBT.println("28 XX XX XX: set color 3 bytes");
-				SerialBT.println("30 XX: set pattern 1 byte");
-				SerialBT.println("35: dec brightness");
-				SerialBT.println("36: inc brightness");
-				SerialBT.println("37: set brightness 1 byte");
-				SerialBT.println("40: right blinker");
-				SerialBT.println("41: left blinker");
-				SerialBT.println("42: enable ota");
-				break;
-		}
-	}
+    //OTA Stuff
+    if (otaState != lastOtaState) { //If ota state changes
+      lastOtaState = otaState;
+      switch (otaState) {
+        case 3: //OTA in error
+          setBuiltInLedFlashRate(50);
+          SerialBT.println("ota error");
+          break;
+        case 2: //OTA is running
+          setBuiltInLedFlashRate(500);
+          SerialBT.println("ota running");
+          break;
+        case 1: //OTA is waiting for update
+          setBuiltInLedFlashRate(200);
+          SerialBT.println("ota waiting");
+          break;
+        default: //OTA not setup
+          SerialBT.println("ota not setup");
+          if (curHasClient) {
+            //BT Connected and OTA not setup
+            //Normal state when riding bike.
+            turnOnBuiltInLed();
+          } else {
+            //BT Not Connected and OTA not setup
+            //Alternate state when riding bike.
+            turnOffBuiltInLed();
+          }
+          break;
+      }
+    }
 
-  //OTA Stuff
-  otaLoop();
-  if (otaStatus != lastOtaStatus) { //If ota state changes
-    lastOtaStatus = otaStatus;
-    switch (otaStatus) {
-      case 3: //OTA in error
-        setBuiltInLedFlashRate(25);
-        SerialBT.println("ota error");
-        break;
-      case 2: //OTA is running
-        setBuiltInLedFlashRate(100);
-        SerialBT.println("ota running");
-        break;
-      case 1: //OTA is waiting for update
-        setBuiltInLedFlashRate(500);
-        SerialBT.println("ota waiting");
-        break;
-      default: //OTA not setup
-        SerialBT.println("ota not setup");
+    //Blue Tooth Status
+    if (curHasClient != lastHasClient) { //If bt connection changes
+      lastHasClient = curHasClient;
+      if (otaState == 0) { //Only show status when ota is not setup
         if (curHasClient) {
-          //BT Connected and OTA not setup
+          //BT Connected
           //Normal state when riding bike.
           turnOnBuiltInLed();
         } else {
           //BT Not Connected and OTA not setup
-          //Alternate state when riding bike.
           turnOffBuiltInLed();
         }
-        break;
-    }
-  }
-
-  //Blue Tooth Status
-  if (curHasClient != lastHasClient) { //If bt connection changes
-    lastHasClient = curHasClient;
-    if (otaStatus == 0) { //Only show status when ota is not setup
-      if (curHasClient) {
-        //BT Connected
-        //Normal state when riding bike.
-        turnOnBuiltInLed();
-      } else {
-        //BT Not Connected and OTA not setup
-        turnOffBuiltInLed();
       }
     }
-  }
+
+    //Check battery voltage every 10 seconds
+    EVERY_N_MILLIS(10000) {
+      voltage_value = (analogRead(voltage_pin) * 16.5 ) / (4095);
+      if (voltage_value <= low_battery_voltage) {
+        setBrightness(128); //Set half brightness
+        setActivePattern(8); //PAT_LOWBATT
+      }
+    }
+    delay(1);
+  } 
+}
+
+//Led Loop:
+//Runs on core 1
+void LEDLoopCode( void * pvParameters ){
+  Serial.print("LED Loop running on core ");
+  Serial.println(xPortGetCoreID());
+  for(;;){
+	  ledLoop();
+    delay(1);
+  } 
+}
+
+
+void loop(void) {
+  otaLoop(); //This must be in loop because if it is in a task on processor 0, it crashes with 'no more processes' when updating.
+  delay(1);
 }
 
 void setup(void) {
+  Serial.begin(115200);
+  Serial.println("bike_lights started");
   pinMode(LED_BUILTIN, OUTPUT);
   btSetup();
   ledSetup();
-  //create a task that will be executed in the Task1code() function, with priority 1 and executed on core 0
   xTaskCreatePinnedToCore(
-                    Task1code,   /* Task function. */
-                    "Task1",     /* name of task. */
+                    MainLoopCode,   /* Task function. */
+                    "Main loop",     /* name of task. */
+                    10000,       /* Stack size of task */
+                    NULL,        /* parameter of the task */
+                    0,           /* priority of the task */
+                    &Task0,      /* Task handle to keep track of created task */
+                    0);          /* pin task to core 0 */ 
+  xTaskCreatePinnedToCore(
+                    LEDLoopCode,   /* Task function. */
+                    "Led loop",     /* name of task. */
                     10000,       /* Stack size of task */
                     NULL,        /* parameter of the task */
                     1,           /* priority of the task */
-                    &Task1,      /* Task handle to keep track of created task */
-                    0);          /* pin task to core 0 */ 
+                    &Task2,      /* Task handle to keep track of created task */
+                    1);          /* pin task to core 0 */ 
 }

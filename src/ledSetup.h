@@ -1,22 +1,23 @@
+#define FASTLED_ALLOW_INTERRUPTS 0
 #include <FastLED.h>
-#include <Canrun.h>
 #include <Preferences.h>
+#include "common.h"
 
 #define PIN 5
-#define LED_COUNT 100
+#define LED_COUNT 22
 #define STRIP_TYPE WS2811
 #define LED_ORDER RGB
 
-const uint8_t PAT_OVERRIDE = 0;
+const uint8_t PAT_PAUSE = 0;
 const uint8_t PAT_OFF = 1;
-const uint8_t PAT_MARQUE = 2;
-const uint8_t PAT_SPARKLE = 3;
-const uint8_t PAT_RAINBOW = 4;
-const uint8_t PAT_SOLID = 5;
-const uint8_t PAT_TEST = 6;
+const uint8_t PAT_TEST = 2;
+const uint8_t PAT_MARQUE = 3;
+const uint8_t PAT_SPARKLE = 4;
+const uint8_t PAT_RAINBOW = 5;
+const uint8_t PAT_SOLID = 6;
 const uint8_t PAT_FIRE = 7;
+const uint8_t PAT_LOWBATT = 8;
 
-Canrun canrun;
 Preferences preferences;
 
 CRGB leds[LED_COUNT];
@@ -24,10 +25,6 @@ CRGB leds[LED_COUNT];
 uint16_t builtInLedFlashMS = 1000;
 uint8_t activePattern = PAT_OFF;
 uint8_t lastPattern = PAT_OFF;
-bool shouldRightBlinker = false;
-bool shouldLeftBlinker = false;
-bool leftBlinkerOn = false;
-bool rightBlinkerOn = false;
 
 
 //Called internally only to temporarily erase leds.
@@ -37,23 +34,19 @@ void black() {
 	FastLED.showColor(CRGB::Black);
 }
 
-void recallLastPattern() {
+void setActivePattern(int pattern = -1) {
 	black();
-	activePattern = lastPattern;
-	SerialBT.println("Restoring Last Pattern:");
-	SerialBT.println(lastPattern);
-}
-
-void setActivePattern(uint8_t pattern) {
-	black();
-	if (pattern != PAT_OVERRIDE) {
-		if (activePattern == PAT_OVERRIDE) return;
-		lastPattern = pattern;
-		SerialBT.println("Saving to Last Pattern:");
-		SerialBT.println(lastPattern);
+	if (pattern != PAT_PAUSE && pattern != PAT_LOWBATT) { //Switch to a real pattern
+    if (pattern == -1) { //If no pattern was specified, use the last pattern
+		  pattern = lastPattern;
+    } else { //If a pattern was specified, use it
+		  lastPattern = pattern;
+    }
+		SerialBT.println("Switching to pattern:");
+		SerialBT.println(pattern);
     preferences.putUInt("pattern", pattern);
-	} else {
-		SerialBT.println("Not to saving pattern.");
+	} else { //Switch to the pause pattern
+		SerialBT.println("Temp switching to pause pattern.");
 	}
 	activePattern = pattern;
 }
@@ -111,31 +104,30 @@ int decreaseBrightness() {
   return setBrightness(cur);
 }
 
-//TODO This pattern wont save because it is literally only set once when this method is called.
-//If I wanted to make this save, I'd need to convert this into a 'doSolidColor' function, and
-//add a 'setSolidColor' function which accepted the bytes and saved them.
-void solidColor(byte* bytes) {
+CRGB solidColor = CRGB::Black;
+void setSolidColorFromBytes(byte* bytes) {
 	setActivePattern(PAT_SOLID);
-	CRGB color;
-	color.r = bytes[1];
-	color.g = bytes[2];
-	color.b = bytes[3];
-	FastLED.showColor(color);
+	solidColor.r = bytes[1];
+	solidColor.g = bytes[2];
+	solidColor.b = bytes[3];
+}
+void solidColorLoop() {
+	FastLED.showColor(solidColor);
 }
 
 bool lastBuiltInLedState = false;
 void setBuiltInLedFlashRate(uint16_t rate) {
-  canrun.setupDelay('i', rate);
+  builtInLedFlashMS = rate;
 }
 
 void turnOffBuiltInLed() {
-  canrun.setupDelay('i', 0);
+  builtInLedFlashMS = 0;
   digitalWrite(LED_BUILTIN, LOW);
   lastBuiltInLedState = false;
 }
 
 void turnOnBuiltInLed() {
-  canrun.setupDelay('i', 0);
+  builtInLedFlashMS = 0;
   digitalWrite(LED_BUILTIN, HIGH);
   lastBuiltInLedState = true;
 }
@@ -152,16 +144,33 @@ void builtInLedFlashLoop() {
 
 void otaUpdateLoop() {
   if (otaProgress > 0) {
-    if (activePattern != PAT_OVERRIDE) {
-      setActivePattern(PAT_OVERRIDE);
-	    FastLED.setBrightness(50);
+    if (activePattern != PAT_PAUSE) {
+      setActivePattern(PAT_PAUSE);
+	    FastLED.setBrightness(128); //Use half brightness
     }
-    for( uint j = 0; j <= otaProgress; j++) {
+    int ledProgress = map(otaProgress, 0, 100, 0, 22);
+    for( uint j = 0; j <= ledProgress; j++) {
       CRGB color = CRGB::Blue;
       leds[j] = color;
     }
 	  FastLED.show();
   }
+}
+
+uint8_t lastLowBattPatternColor = 0;
+void lowBattPatternLoop() {
+	CRGB color;
+	switch (lastLowBattPatternColor) {
+		case 0:
+			color = CRGB(255, 0, 0);
+			lastLowBattPatternColor = 1;
+			break;
+		case 1:
+			color = CRGB(0, 0, 0);
+			lastLowBattPatternColor = 0;
+			break;
+	}
+	FastLED.showColor(color);
 }
 
 uint8_t lastTestPatternColor = 0;
@@ -189,8 +198,10 @@ void testPatternLoop() {
 }
 
 void sparkleLoop( uint8_t chanceOfGlitter) {
-	FastLED.clear(true); //This makes this method not work - it seems to clear the data after show is executed or something
-	if( random8() < chanceOfGlitter) {
+  //This probably shouldn't clear every loop ?
+	//FastLED.clear(true); //This makes this method not work - it seems to clear the data after show is executed or something
+	FastLED.showColor(CRGB::Black);
+	if( random8(100) <= chanceOfGlitter) {
     leds[ random16(LED_COUNT) ] = CRGB::White;
 	}
 	FastLED.show();
@@ -274,60 +285,22 @@ void marqueLoop(CRGB* leds, int numLeds) {
   }
 }
 
-void setBlinker(bool on, CRGB* leds, uint8_t start, uint8_t end) {
-	for (uint8_t i = start; i < end; i++){
-		leds[i] = (on) ? CRGB::Orange : CRGB::Black;
-	}
-	FastLED.show();
+void ledStatus() {
+  Serial.println("LED Status:");
+  Serial.print("Current Millis: ");
+  Serial.println(millis());
+  Serial.print("Built In Led Flash Rate: ");
+  Serial.println(builtInLedFlashMS);
+  Serial.print("Active Pattern: ");
+  Serial.println(activePattern);
+  Serial.print("LED Controllers: ");
+  Serial.println(FastLED.count());
+  Serial.print("LED Brightness: ");
+  Serial.println(FastLED.getBrightness());
+  Serial.print("LED FPS: ");
+  Serial.println(FastLED.getFPS());
+  Serial.println("");
 }
-void setLeftBlinker(bool on) {
-	//setBlinker(on, frontLeft, FRONT_LEFT_START, FRONT_LEFT_END);
-	//setBlinker(on, body, BODY_LEFT_START, BODY_LEFT_END);
-}
-void setRightBlinker(bool on) {
-	//setBlinker(on, frontRight, FRONT_RIGHT_START, FRONT_RIGHT_END);
-	//setBlinker(on, body, BODY_RIGHT_START, BODY_RIGHT_END);
-}
-void blinkerLoop() {
-	if (shouldRightBlinker) {
-		setRightBlinker(rightBlinkerOn);
-		rightBlinkerOn = !rightBlinkerOn;
-	}
-	if (shouldLeftBlinker) {
-		setLeftBlinker(leftBlinkerOn);
-		leftBlinkerOn = !leftBlinkerOn;
-	}
-}
-
-void blinker(bool isLeft, bool &shouldBlink, bool &shouldBlink2, bool &status, bool &status2) {
-	shouldBlink = !shouldBlink;
-	if (!shouldBlink) {
-		//Turn Blinker Off
-		if (isLeft) {
-			setLeftBlinker(false);
-		} else {
-			setRightBlinker(false);
-		}
-		if (!shouldBlink2) {
-			recallLastPattern();
-		}
-	} else {
-		//Turn Blinker On
-		setActivePattern(PAT_OVERRIDE);
-		status = false;
-		if (shouldBlink2) {
-			status2 = false;
-		}
-	}
-}
-void leftBlinker() {
-	blinker(true, shouldLeftBlinker, shouldRightBlinker, leftBlinkerOn, rightBlinkerOn);
-}
-void rightBlinker() {
-	blinker(false, shouldRightBlinker, shouldLeftBlinker, rightBlinkerOn, leftBlinkerOn);
-}
-
-
 
 
 /**
@@ -338,15 +311,8 @@ void ledSetup() {
 
   preferences.begin("bikelights", false);
 
-  setBrightness(preferences.getUInt("bright", 255));
-	canrun.setupDelay('t', 1000);
-	canrun.setupDelay('s', 1000);
-	canrun.setupDelay('r', 50);
-	canrun.setupDelay('f', 16);
-	canrun.setupDelay('b', 100);
-  canrun.setupDelay('o', 500);
-  setBuiltInLedFlashRate(1);
-	setActivePattern(preferences.getUInt("pattern", PAT_MARQUE));
+  setBrightness(preferences.getUInt("bright", 128)); //Default to half brightness
+	setActivePattern(preferences.getUInt("pattern", PAT_MARQUE)); //Default to marque
 }
 
 /**
@@ -356,38 +322,48 @@ void ledSetup() {
 void ledLoop() {
 	switch (activePattern) {
 		case PAT_TEST:
-			if (canrun.run('t')) {
+      EVERY_N_MILLIS(1000) {
 				testPatternLoop();
 			}
 			break;
+		case PAT_SOLID:
+      EVERY_N_MILLIS(1000) {
+				solidColorLoop();
+			}
+			break;
 		case PAT_SPARKLE:
-			if (canrun.run('s')) {
-				sparkleLoop(255);
+      EVERY_N_MILLIS(100) {
+				sparkleLoop(100);
 			}
 			break;
 		case PAT_MARQUE:
 			marqueLoop(leds, LED_COUNT);
 			break;
 		case PAT_RAINBOW:
-			if (canrun.run('r')) {
+      EVERY_N_MILLIS(50) {
 				rainbowLoop();
 			}
 			break;
 		case PAT_FIRE:
-			if (canrun.run('f')) {
+      EVERY_N_MILLIS(16) {
 				fireLoop(leds, 0, LED_COUNT, true, heat);
+			}
+			break;
+		case PAT_LOWBATT:
+      EVERY_N_MILLIS(500) {
+				lowBattPatternLoop();
 			}
 			break;
 		default:
 			break;
 	}
-	if (canrun.run('b')) {
-		blinkerLoop();
-	}
-  if (canrun.run('i')) {
-    builtInLedFlashLoop();
+  if (builtInLedFlashMS > 0) {
+    EVERY_N_MILLISECONDS_I( timingObj, 1) {
+      timingObj.setPeriod(builtInLedFlashMS);
+      builtInLedFlashLoop();
+    }
   }
-  if (canrun.run('o')) {
+  EVERY_N_MILLIS(500) {
     otaUpdateLoop();
   }
 }
