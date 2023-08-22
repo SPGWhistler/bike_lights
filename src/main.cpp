@@ -9,8 +9,11 @@
 #endif
 
 const int voltage_pin = 33;
+const float low_battery_voltage = 14.0;
+const float critical_battery_voltage = 12.0;
+bool batteryVoltageWarned = false;
 float voltage_value = 0;
-const int low_battery_voltage = 14;
+float test_voltage_value = 0;
 
 uint8_t lastOtaState = 255;
 u_int8_t otaState = 0;
@@ -75,6 +78,11 @@ void MainLoopCode( void * pvParameters ){
           SerialBT.println("enable OTA Lexis");
           otaSetup(SerialBT, 1);
           break;
+        case 0x44:
+          SerialBT.print("set test voltage value ");
+          SerialBT.println(int(bytes[1]));
+          test_voltage_value = int(bytes[1]);
+          break;
         default:
           SerialBT.println("Commands (in hex):");
           SerialBT.println("28 XX XX XX: set color 3 bytes");
@@ -85,6 +93,17 @@ void MainLoopCode( void * pvParameters ){
           SerialBT.println("38: get battery voltage");
           SerialBT.println("42: enable ota");
           SerialBT.println("43: enable ota lexis");
+          SerialBT.println("");
+          SerialBT.println("Patterns:");
+          SerialBT.println("0 Pause");
+          SerialBT.println("1 Off");
+          SerialBT.println("2 Test");
+          SerialBT.println("3 Marque");
+          SerialBT.println("4 Sparkle");
+          SerialBT.println("5 Rainbow");
+          SerialBT.println("6 Solid");
+          SerialBT.println("7 Fire");
+          SerialBT.println("8 LowBatt");
           break;
       }
     }
@@ -137,10 +156,22 @@ void MainLoopCode( void * pvParameters ){
 
     //Check battery voltage every 10 seconds
     EVERY_N_MILLIS(10000) {
-      voltage_value = (analogRead(voltage_pin) * 16.5 ) / (4095);
-      if (voltage_value <= low_battery_voltage) {
+      voltage_value = (analogRead(voltage_pin) * 16.5 ) / (4095); //16.5 is the max voltage the esp32 can read
+      if (test_voltage_value > 0) {
+        voltage_value = test_voltage_value;
+      }
+      if (voltage_value <= low_battery_voltage && batteryVoltageWarned == false) {
+        //If the voltage is low, warn by flashing lights. But allow for continued use.
+        batteryVoltageWarned = true; //Warned already, dont warn again
         setBrightness(128); //Set half brightness
         setActivePattern(8); //PAT_LOWBATT
+      }
+      if (voltage_value <= critical_battery_voltage) {
+        //If voltage is critically low, force a power down
+        setActivePattern(PAT_PAUSE); //Pause pattern without saving pause
+	      FastLED.setBrightness(0); //Turn off LEDs without saving brightness
+        FastLED.clear(true); //Clear pattern without saving it
+        esp_deep_sleep_start(); //Go as low power as possible until reset is pressed or power is lost
       }
     }
     delay(1);
